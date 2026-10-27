@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Chauffes">
-<meta name="theme-color" content="#2f6b45">
+<meta name="theme-color" content="#f6f3ec">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -16,10 +16,11 @@
 <style>
 /* Layout : une colonne étroite, en-tête collant ; accueil = liste des chauffes ; une chauffe = 4 onglets. Grosses zones tactiles. */
 :root{
-  --bg:#eef1ec; --surface:#ffffff; --sunk:#e3e8e1; --line:#cfd6cc;
-  --fg:#1d2620; --muted:#5d6a61; --accent:#2f6b45; --accent-ink:#ffffff; --accent-soft:#d8e9dd;
-  --ok:#2f6b45; --ok-soft:#d8e9dd;
-  --warn:#9a5a06; --warn-soft:#f6e6c9; --bad:#a3322a; --bad-soft:#f5dcd9;
+  --bg:#f6f3ec; --surface:#ffffff; --sunk:#ece7dc; --line:#dbd3c3;
+  --fg:#221e30; --muted:#5f596c; --accent:#4a4278; --accent-ink:#ffffff; --accent-soft:#e7e3f3;
+  --ok:#2e7a2c; --ok-soft:#dcefd5;
+  --warn:#94570a; --warn-soft:#f6e7c8; --bad:#a42a45; --bad-soft:#f7dde3;
+  --gold:#b9a46a;
   --s-in:#1f7a45; --s-ext:#2f6fc0;
   --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -27,10 +28,11 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root{
-  --bg:#141a16; --surface:#1d2520; --sunk:#252f28; --line:#36433a;
-  --fg:#e4ebe5; --muted:#9caaa0; --accent:#6fbf8a; --accent-ink:#0f1a13; --accent-soft:#24402e;
-  --ok:#6fbf8a; --ok-soft:#24402e;
-  --warn:#e3a54a; --warn-soft:#3a2d17; --bad:#ec8a80; --bad-soft:#3d2220;
+  --bg:#16141d; --surface:#201d2a; --sunk:#292534; --line:#3a3550;
+  --fg:#ece9f3; --muted:#aaa4b9; --accent:#b6abea; --accent-ink:#16141d; --accent-soft:#332d4c;
+  --ok:#86cc7d; --ok-soft:#203a22;
+  --warn:#e3a54a; --warn-soft:#3a2d17; --bad:#f08fa2; --bad-soft:#44222c;
+  --gold:#cdb880;
   --s-in:#3fa866; --s-ext:#5b8fe0; color-scheme:dark}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -348,6 +350,14 @@ details.frlot{margin:0}
 details.frlot .foldin{padding-top:6px}
 .pxj{display:flex;flex-direction:column;gap:6px}
 .pxrow{display:flex;align-items:center;gap:10px}.pxrow span{flex:1;font-size:15px}.pxrow input{flex:0 0 110px;width:110px}
+/* Habillage aux couleurs du logo */
+.brandh{display:flex;align-items:center;gap:10px}
+.brandi{width:36px;height:36px;border-radius:9px;flex:0 0 auto}
+.brands{font-size:13.5px;color:var(--muted);padding-top:6px;border-top:2px dotted var(--gold)}
+.brands i{color:var(--gold);font-style:normal}
+header.top h1{color:var(--accent)}
+nav.tabs button[aria-selected="true"]{color:var(--accent)}
+details.fold[open]>summary{border-left:4px solid var(--gold)}
 </style>
 </head>
 <body>
@@ -368,7 +378,7 @@ details.frlot .foldin{padding-top:6px}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.37.0';
+const APP_VERSION = '2.38.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de chauffes';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -985,7 +995,7 @@ function renderHome(){
   if(S.dossierSel===undefined){ try{ S.dossierSel=localStorage.getItem(LS+'dossier')||'all'; }catch(e){ S.dossierSel='all'; } if(S.dossierSel!=='all'&&S.dossierSel!=='none'&&!dossiersAll().some(d=>d.id===S.dossierSel)) S.dossierSel='all'; }
   const list=liveChauffes().filter(c=>inDossier(c,S.dossierSel)); const dsel=S.dossierSel&&S.dossierSel!=='all'&&S.dossierSel!=='none'?dossiersAll().find(d=>d.id===S.dossierSel):null;
   const seedAvail = SEED_CHAUFFE1 && !S.chauffes.some(c=>c.id===SEED_CHAUFFE1.chauffe.id) && !S.seedHidden && !Sync.active();
-  app.innerHTML=`<header class="top"><div class="title-row"><h1>${APP_NAME}</h1><button class="ghost" id="h-set" type="button" style="flex:0 0 auto">Réglages</button></div></header>
+  app.innerHTML=`<header class="top"><div class="title-row"><h1 class="brandh"><img class="brandi" src="icon-192.png" alt="" onerror="this.remove()">${APP_NAME}</h1><button class="ghost" id="h-set" type="button" style="flex:0 0 auto">Réglages</button></div><div class="brands">Vivero Richter <i>·</i> Pépinières Barnier</div></header>
   <section class="panel">${installHTML()}${syncbarHTML()}
     ${seedAvail?`<div class="card"><h3>Chauffe 1 de Raphaël</h3><p class="note">Les relevés et observations de la chauffe 1 (Vivero Richter, octobre 2026), prises par Raphaël, avec la liste des 27 lots, sont prêts à être ajoutés.</p><div class="list"><button class="primary" id="seed-me" type="button">Je suis Raphaël : ajouter à mon nom</button><button class="ghost" id="seed-ok" type="button">Ajouter (notes de Raphaël)</button><button class="ghost" id="seed-no" type="button">Pas maintenant</button></div></div>`:''}
     <div class="field"><span class="lab">${esc(L('Dossiers','Carpetas'))}</span>${dossierBarHTML('h-dos',S.dossierSel,true)}${S.dosNew?`<div class="dosrow"><input id="h-dosn" type="text" placeholder="${esc(L('Ex. : Année 1, Saison 2027','Ej.: Año 1, Temporada 2027'))}" value="${esc(S.dosNew===true?'':S.dosNew)}"><button class="primary" type="button" id="h-dosok">${esc(L('Créer','Crear'))}</button><button class="ghost" type="button" id="h-dosx">${esc(L('Annuler','Cancelar'))}</button></div>`:''}${dsel&&!S.dosNew?`<div class="dosrow"><button class="linkbtn" type="button" id="h-dosren">${esc(L('Renommer','Renombrar'))}</button><button class="linkbtn" type="button" id="h-dosdel">${esc(L('Supprimer le dossier','Eliminar la carpeta'))}</button><span class="hint">${esc(L('Les chauffes du dossier ne sont pas supprimées.','Las calefacciones de la carpeta no se eliminan.'))}</span></div>`:''}</div>
@@ -3513,14 +3523,14 @@ function renderCompare(){
 }
 
 /* ---------- 4. Registre de traçabilité ---------- */
-const REG_CSS=`.paper .parth{font:700 20px/1.15 "Barlow Condensed","Arial Narrow",sans-serif;margin:6px 0 0;padding:6px 0 4px;border-bottom:3px solid #2f6b45;color:#1b1b1b;break-after:avoid}
+const REG_CSS=`.paper .parth{font:700 20px/1.15 "Barlow Condensed","Arial Narrow",sans-serif;margin:6px 0 0;padding:6px 0 4px;border-bottom:3px solid #4a4278;color:#1b1b1b;break-after:avoid}
 .paper .part{display:grid;gap:14px;min-width:0}.paper .part>*{min-width:0}
 .paper .toc ol{margin:0;padding-left:20px;display:grid;gap:3px}
 @media print{.paper .part{break-before:page}}
 .paper{background:#fff;color:#1b1b1b;border:1px solid var(--line,#ccc);border-radius:10px;padding:20px 18px;font:14px/1.45 "Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;gap:16px}
 .paper h2{font:700 21px/1.15 "Barlow Condensed","Arial Narrow",sans-serif;margin:0;color:#1b1b1b}
-.paper h3{font:600 16px/1.2 "Barlow Condensed","Arial Narrow",sans-serif;margin:0 0 6px;color:#2f6b45;text-transform:uppercase;letter-spacing:.05em}
-.paper .etab{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:2px solid #2f6b45;padding-bottom:10px}
+.paper h3{font:600 16px/1.2 "Barlow Condensed","Arial Narrow",sans-serif;margin:0 0 6px;color:#4a4278;text-transform:uppercase;letter-spacing:.05em}
+.paper .etab{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:2px solid #b9a46a;padding-bottom:10px}
 .paper .etab b{font-size:16px}
 .paper .small{font-size:12px;color:#555}
 .paper table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
