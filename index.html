@@ -358,6 +358,13 @@ details.frlot .foldin{padding-top:6px}
 header.top h1{color:var(--accent)}
 nav.tabs button[aria-selected="true"]{color:var(--accent)}
 details.fold[open]>summary{border-left:4px solid var(--gold)}
+.decday{display:grid;gap:8px;padding:12px 14px;border-radius:12px;background:var(--accent-soft)}
+.decday-today{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:17px}
+.decday-today b{font-size:24px;color:var(--accent)}
+.decday-list{display:grid;gap:4px;border-top:2px dotted var(--gold);padding-top:8px}
+.decday-row{display:grid;grid-template-columns:1fr auto;gap:0 10px}.decday-row small{grid-column:1/-1;color:var(--muted);font-size:13px}
+.pxj{display:flex;flex-direction:column;gap:6px}
+.pxrow{display:flex;align-items:center;gap:10px}.pxrow span{flex:1;font-size:15px}.pxrow input{flex:0 0 110px;width:110px}
 </style>
 </head>
 <body>
@@ -378,7 +385,7 @@ details.fold[open]>summary{border-left:4px solid var(--gold)}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.38.0';
+const APP_VERSION = '2.39.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de chauffes';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -2002,6 +2009,23 @@ function decLots(ch){ const lots=(ch.lots||[]).map(l=>({lot:String(l.lot), varie
   return lots.map(l=>Object.assign(l,{d:decOf(ch.id,l.lot)})); }
 function decAgg(list){ let a=0,b=0; list.forEach(x=>{ const e=x.d||x; if(e&&e.pDec>0&&e.pRem!=null){ a+=e.pDec; b+=e.pRem; } }); return {pDec:a, pRem:b, rate:a?b/a:null}; }
 function decPlaces(ch){ const s=new Set(); thermosOf(ch).forEach(t=>s.add(L('Près de ','Cerca de ')+t.nom)); S.entrees.filter(e=>!e.supprime&&e.type==='decaisse'&&e.place).forEach(e=>s.add(e.place)); return [...s]; }
+function decDays(ch){ const m={}, todo=[]; const add=(d,lot,px)=>{ const x=m[d]=m[d]||{d,px:0,lots:[],todo:[]}; x.px=Math.round((x.px+px)*100)/100; x.lots.push({lot,px}); };
+  entriesOf(ch.id,'decaisse').forEach(e=>{ const a=decIso(ch,e), b=decIsoFin(ch,e), n=Number(e.pDec)||0; if(!a||!n) return;
+    const pj=e.pxJours&&Object.keys(e.pxJours).length?e.pxJours:null;
+    if(!b||b===a) add(a,e.lot,n);
+    else if(pj){ Object.keys(pj).forEach(d=>add(d,e.lot,Number(pj[d])||0)); const rest=Math.round((n-Object.values(pj).reduce((x,v)=>x+(Number(v)||0),0))*100)/100; if(rest>0) todo.push({lot:e.lot,px:rest,a,b}); }
+    else todo.push({lot:e.lot,px:n,a,b}); });
+  todo.forEach(t=>{ Object.values(m).filter(x=>x.d>=t.a&&x.d<=t.b).forEach(x=>x.todo.push(t)); });
+  return {days:Object.values(m).sort((x,y)=>y.d.localeCompare(x.d)), todo}; }
+function decDaysHTML(ch){ const D=decDays(ch); if(!D.days.length&&!D.todo.length) return ''; const t=todayIso(); const td=D.days.find(x=>x.d===t);
+  const lotsTxt=x=>x.lots.map(l=>L('lot ','lote ')+l.lot+' : '+fmtN(l.px)).join(', ');
+  return `<div class="decday">
+    <div class="hhead"><span class="lab">${esc(L('Palox décaissés par jour','Palox vaciados por día'))}</span></div>
+    <div class="decday-today"><span>${esc(L("Aujourd'hui","Hoy"))}</span><b>${esc(fmtN(td?td.px:0))} palox</b></div>
+    ${td?`<div class="hint">${esc(lotsTxt(td))}</div>`:''}
+    ${D.days.filter(x=>x.d!==t).length?`<div class="decday-list">${D.days.filter(x=>x.d!==t).map(x=>`<div class="decday-row"><span>${esc(dayLabel({debut:x.d},1))}</span><b class="mono">${esc(fmtN(x.px))} palox</b><small>${esc(lotsTxt(x))}</small></div>`).join('')}</div>`:''}
+    ${D.todo.length?`<p class="note">${esc(L('Pas encore réparti par jour : ','Aún no repartido por día: ')+D.todo.map(x=>L('lot ','lote ')+x.lot+' ('+fmtN(x.px)+' palox, '+isoFr(x.a).slice(0,5)+' → '+isoFr(x.b).slice(0,5)+')').join(', ')+L('. Touche « Modifier » sur le lot pour donner le nombre de chaque jour.','. Toca « Modificar » en el lote para dar el número de cada día.'))}</p>`:''}
+  </div>`; }
 function decCardHTML(ch){
   const lots=decLots(ch); const done=lots.filter(l=>l.d); const ag=decAgg(done); const open=S.decOpen===ch.id || !done.length;
   const grp=key=>{ const m={}; done.forEach(l=>{ const k=key==='place'?(l.d.place||L('Place non notée','Lugar no anotado')):key==='jour'?(decWhen(ch,l.d)||'?'):(l[key]||'?'); (m[k]=m[k]||[]).push(l); }); return Object.entries(m).map(([k,ls])=>({k,a:decAgg(ls)})).filter(x=>x.a.rate!=null).sort((x,y)=>y.a.rate-x.a.rate); };
@@ -2009,6 +2033,7 @@ function decCardHTML(ch){
   return `<div class="card" style="gap:10px" id="dec-card">
     <div class="field"><label for="dec-sortie">${esc(L('Date de sortie de chauffe','Fecha de salida de la calefacción'))}</label><div class="dh"><input id="dec-sortie" type="date" value="${esc(ch.sortie||'')}">${hPick('dec-sortie',ch.sortieH)}</div></div>
     <div class="hhead"><h3>${esc(L('Décaissage','Desencajonado'))}</h3><span class="mono">${esc(done.length+' / '+lots.length+' '+L('lots','lotes'))}</span></div>
+    ${decDaysHTML(ch)}
     <p class="note">${esc(L("À la sortie de chauffe, note pour chaque lot combien de palox ont été vidés et combien ont été re-remplis pour l'acclimatation (0,5 = un demi-palox). L'app calcule le % de palox gardés. Pas besoin de compter les plants.","Al salir de la calefacción, anota por lote cuántos palox se vaciaron y cuántos se volvieron a llenar para la aclimatación (0,5 = medio palox). La app calcula el % de palox conservados. No hace falta contar plantas."))}</p>
     ${done.length?`<div class="raterow"><span class="rk">${esc(L('Total','Total'))}</span>${rateBar(Math.min(1,ag.rate||0))}<span class="rv mono">${pct(ag.rate)}</span></div><div class="rem">${esc(fmtN(ag.pRem)+L(' palox re-remplis sur ',' palox rellenados de ')+fmtN(ag.pDec)+L(' décaissés',' vaciados'))}</div>`:''}
     ${open?`${grpHTML(L('Par place dans la chambre','Por lugar en la cámara'),'place')}${grpHTML(L('Par date de décaissage','Por fecha de desencajonado'),'jour')}${grpHTML(L('Par porte-greffe','Por portainjerto'),'pg')}
@@ -2042,6 +2067,7 @@ function bindDecCard(ch){
         <div class="field"><label for="dec-pl">${esc(L('Place dans la chambre','Lugar en la cámara'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="dec-pl" type="text" list="dec-places" value="${esc(e&&e.place||'')}" placeholder="${esc(L('Où était le palox','Dónde estaba el palox'))}"><datalist id="dec-places">${places.map(p=>`<option value="${esc(p)}"></option>`).join('')}</datalist></div></div>
         <span class="ex">${esc(L('Ex. : près de la porte, fond à droite, près de « Palox 3 haut ». Garde toujours les mêmes mots pour pouvoir comparer.','Ej.: cerca de la puerta, fondo a la derecha, cerca de « Palox 3 arriba ». Usa siempre las mismas palabras para poder comparar.'))}</span>
         <div class="field"><label for="dec-df">${esc(L('Fini le (si le lot a été fini un autre jour)','Terminado el (si el lote se terminó otro día)'))}</label><div class="dh"><input id="dec-df" type="date" value="${esc(decIsoFin(ch,e)||'')}">${hPick('dec-df',e&&e.dFinH)}</div><span class="ex">${esc(L("Choisis les vraies dates dans le calendrier, même longtemps après la chauffe. Laisse « Fini le » vide si tout a été fait le même jour.","Elige las fechas reales en el calendario, aunque sea mucho después de la calefacción. Deja « Terminado el » vacío si todo se hizo el mismo día."))}</span></div>
+        <div class="field" id="dec-pxf" hidden><span class="lab">${esc(L('Palox décaissés chaque jour','Palox vaciados cada día'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></span><div id="dec-pxj" class="pxj"></div><div class="sumbox" id="dec-pxs"></div></div>
         <div class="field"><label for="dec-rem">${esc(L('Remarques','Observaciones'))}</label><input id="dec-rem" type="text" value="${esc(e&&e.remarque||'')}"></div>
         <div class="row"><button class="primary" type="button" id="dec-ok">${esc(L('Enregistrer','Guardar'))}</button><button class="ghost" type="button" id="dec-x">${esc(L('Annuler','Cancelar'))}</button></div>
         ${e?`<button class="ghost danger" type="button" id="dec-del">${esc(L('Supprimer ce décaissage','Eliminar este desencajonado'))}</button>`:''}
@@ -2049,6 +2075,14 @@ function bindDecCard(ch){
       el.appendChild(d);
       const calc=()=>{ const a=num($('dec-pd').value), b=num($('dec-pr').value); $('dec-calc').innerHTML=a>0&&b!=null&&b>=0?`<b>${pct(b/a)}</b> ${esc(L('de palox gardés','de palox conservados'))}${b>a?' · '+esc(L('plus de palox re-remplis que décaissés : les plants ont été moins serrés ?','más palox rellenados que vaciados: ¿plantas menos apretadas?')):''}`:''; };
       $('dec-pd').oninput=calc; $('dec-pr').oninput=calc; calc();
+      { const cur=Object.assign({}, e&&e.pxJours||{});
+        const drawPx=()=>{ const box=$('dec-pxj'); box.querySelectorAll('input').forEach(i=>{ cur[i.dataset.d]=i.value; });
+          const a=$('dec-d').value, b=$('dec-df').value; if(!a||!b||b<=a){ $('dec-pxf').hidden=true; box.innerHTML=''; return; } $('dec-pxf').hidden=false;
+          const ds=[]; const t=new Date(a+'T12:00:00'); while(ds.length<62){ const iso=t.toISOString().slice(0,10); ds.push(iso); if(iso>=b) break; t.setDate(t.getDate()+1); }
+          box.innerHTML=ds.map(dd=>`<div class="pxrow"><span>${esc(dayLabel({debut:dd},1))}</span><input class="num" type="text" inputmode="decimal" data-d="${dd}" value="${esc(cur[dd]!=null&&cur[dd]!==''?String(cur[dd]).replace('.',','):'')}" placeholder="palox"></div>`).join('');
+          const upd=()=>{ const tot=[...box.querySelectorAll('input')].reduce((x,i)=>x+(num(i.value)||0),0), all=num($('dec-pd').value)||0; $('dec-pxs').textContent=(tot?L('Réparti : ','Repartido: ')+fmtN(Math.round(tot*100)/100)+' / '+fmtN(all)+' palox':L('Ex. : 6 le premier jour, 4 le lendemain.','Ej.: 6 el primer día, 4 al día siguiente.')); };
+          box.querySelectorAll('input').forEach(i=>i.addEventListener('input',upd)); $('dec-pd').addEventListener('input',upd); upd(); };
+        drawPx(); ['dec-d','dec-df'].forEach(id=>$(id).addEventListener('change',drawPx)); }
       $('dec-x').onclick=()=>{ S.decEdit=null; renderChauffe(); };
       if($('dec-del')){ let c=false; $('dec-del').onclick=async()=>{ if(!c){ c=true; $('dec-del').textContent=L('Toucher encore pour supprimer','Tocar otra vez para eliminar'); return; } await removeEntry(e); S.decEdit=null; toast(L('Décaissage supprimé.','Desencajonado eliminado.')); renderChauffe(); }; }
       $('dec-ok').onclick=async()=>{ const st=$('dec-st'); const a=num($('dec-pd').value), b=num($('dec-pr').value);
@@ -2056,7 +2090,10 @@ function bindDecCard(ch){
         const dd=$('dec-d').value, df=$('dec-df').value&&$('dec-df').value!==$('dec-d').value?$('dec-df').value:''; if(!dd){ st.textContent=L('Indique la date du décaissage.','Indica la fecha del desencajonado.'); st.className='status err'; return; }
         if(df&&df<dd){ st.textContent=L('La date de fin est avant la date de début.','La fecha de fin es antes de la fecha de inicio.'); st.className='status err'; return; }
         if(b==null||b<0){ st.textContent=L('Indique le nombre de palox re-remplis (0 si aucun).','Indica el número de palox rellenados (0 si ninguno).'); st.className='status err'; return; }
-        const ent=Object.assign({}, e||{id:'dec:'+ch.id+':'+l.lot, type:'decaisse', chauffeId:ch.id, lot:l.lot, creeLe:nowIso()}, {variete:l.variete, pg:l.pg, pDec:Math.round(a*100)/100, pRem:Math.round(b*100)/100, dDeb:dd, dFin:df, dDebH:hVal('dec-d'), dFinH:df?hVal('dec-df'):'', jour:(ch.debut?chDayOfIso(ch,dd):null), jourFin:(df&&ch.debut?chDayOfIso(ch,df):null), place:$('dec-pl').value.trim(), remarque:$('dec-rem').value.trim(), auteurId:S.me.id, auteurNom:S.me.nom});
+        const pxJours={}; let pxBad=false, pxTot=0; if(df) $('dec-pxj').querySelectorAll('input').forEach(i=>{ const t=i.value.trim(); if(!t) return; const v=num(t); if(v==null||v<0) pxBad=true; else { pxJours[i.dataset.d]=v; pxTot+=v; } });
+        if(pxBad){ st.textContent=L('Nombre de palox illisible : tape par exemple 3 ou 2,5.','Número de palox ilegible: escribe por ejemplo 3 o 2,5.'); st.className='status err'; return; }
+        if(pxTot>a+0.001){ st.textContent=L('Les palox de chaque jour dépassent le total décaissé ('+fmtN(a)+').','Los palox de cada día superan el total vaciado ('+fmtN(a)+').'); st.className='status err'; return; }
+        const ent=Object.assign({}, e||{id:'dec:'+ch.id+':'+l.lot, type:'decaisse', chauffeId:ch.id, lot:l.lot, creeLe:nowIso()}, {variete:l.variete, pg:l.pg, pDec:Math.round(a*100)/100, pRem:Math.round(b*100)/100, dDeb:dd, dFin:df, pxJours, dDebH:hVal('dec-d'), dFinH:df?hVal('dec-df'):'', jour:(ch.debut?chDayOfIso(ch,dd):null), jourFin:(df&&ch.debut?chDayOfIso(ch,df):null), place:$('dec-pl').value.trim(), remarque:$('dec-rem').value.trim(), auteurId:S.me.id, auteurNom:S.me.nom});
         delete ent.supprime;
         try{ await saveEntry(ent); S.decEdit=null; toast(L('Lot ','Lote ')+l.lot+L(' : ',': ')+pct(decRate(ent))+L(' de palox gardés.',' de palox conservados.')); renderChauffe(); }catch(x){ st.textContent=L('Enregistrement impossible.','No se pudo guardar.'); st.className='status err'; } };
       setTimeout(()=>{ d.scrollIntoView({block:'center'}); const f=$('dec-pr'); if(f) f.focus(); },30);
