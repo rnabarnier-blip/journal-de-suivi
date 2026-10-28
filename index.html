@@ -377,6 +377,8 @@ details.fold[open]>summary{border-left:4px solid var(--gold)}
 input[type=date],input[type=time],input[type=datetime-local]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;width:100%;box-sizing:border-box;text-align:left}
 input::-webkit-date-and-time-value{text-align:left}
 .two>*,.three>*{min-width:0}
+.suempty .sut b{color:var(--muted)}
+.suempty .sui{opacity:.55}
 </style>
 </head>
 <body>
@@ -397,7 +399,7 @@ input::-webkit-date-and-time-value{text-align:left}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.43.0';
+const APP_VERSION = '2.44.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1535,16 +1537,17 @@ const SU_PHASES=[
   {k:'chauffe', ic:'🔥', fr:'Chauffe', es:'Calefacción', tab:'jour', has:ch=>true},
   {k:'accA', ic:'🌬', fr:'Acclimatation intérieure', es:'Aclimatación interior', tab:'acc', has:ch=>accList(ch).some(X=>(X.phase||'avant')==='avant'), html:ch=>accRegistreHTML(ch,'§','avant')},
   {k:'dec', ic:'📦', fr:'Décaissage', es:'Desencajonado', tab:'dec', has:ch=>decLots(ch).some(l=>l.d), html:ch=>decRegistreHTML(ch)},
-  {k:'accB', ic:'🌤', fr:'Acclimatation dehors', es:'Aclimatación afuera', tab:'dec', has:ch=>accList(ch).some(X=>X.phase==='apres'), html:ch=>accRegistreHTML(ch,'§','apres')},
+  {k:'accB', ic:'🌤', fr:'Acclimatation dehors', es:'Aclimatación afuera', tab:'acc', has:ch=>accList(ch).some(X=>X.phase==='apres'), html:ch=>accRegistreHTML(ch,'§','apres')},
   {k:'frigo', ic:'❄️', fr:'Frigo', es:'Frigorífico', tab:'frigo', has:ch=>frigoEnts(ch).length>0||frigoTemps(ch).length>0, html:ch=>frigoRegistreHTML(ch)},
   {k:'plant', ic:'🌾', fr:'Plantation', es:'Plantación', tab:'plant', has:ch=>plLots(ch).length>0||plOps(ch).length>0||plPhytos(ch).length>0||plStepEnts(ch).some(e=>!e.masque), html:ch=>plantRegistreHTML(ch)},
   {k:'triage', ic:'✂️', fr:'Triage', es:'Selección', tab:'bilan', has:ch=>lotsWithBilan(ch).some(l=>bilanRate(l.b)!=null), html:ch=>{ const lw=lotsWithBilan(ch); return `<section>${histoSVG(ch,true)?`<div class="fig" style="margin-bottom:10px">${histoSVG(ch,true)}</div>`:''}<div class="scrollx"><table><thead><tr><th>${esc(L('Lot','Lote'))}</th><th>${esc(L('Variété','Variedad'))}</th><th>${esc(L('Porte-greffe','Portainjerto'))}</th><th>${esc(L('Greffés','Injertadas'))}</th><th>${esc(L('Bons','Buenas'))}</th><th>${esc(L('Réussite','Éxito'))}</th><th>${esc(L('Cause rebuts','Causa descartes'))}</th></tr></thead><tbody>${lw.map(l=>`<tr><td>${esc(l.lot)}</td><td>${esc(l.variete||'')}</td><td>${esc(l.pg||'')}</td><td>${l.b&&l.b.tries>0?l.b.tries:''}</td><td>${l.b&&l.b.tries>0?bilanBons(l.b):''}</td><td>${bilanRate(l.b)!=null?pct(bilanRate(l.b)):'—'}</td><td>${esc(l.b&&l.b.cause?T(l.b.cause):'')}</td></tr>`).join('')}</tbody></table></div></section>`; }},
   {k:'tnotes', ic:'📝', fr:'Notes générales', es:'Notas generales', tab:null, has:ch=>tabNotes(ch).length>0, html:ch=>tabNotesRegistreHTML(ch)},
   {k:'phyto', ic:'🧪', fr:'Tous les traitements', es:'Todos los tratamientos', tab:null, has:ch=>allPhytos(ch).length>0, html:ch=>`<section>${phytoTableHTML(ch,true)}</section>`}];
-function tabSuivi(ch, body){ S.suOpen=S.suOpen||{}; const PS=phaseSummaries(ch); const ph=SU_PHASES.filter(x=>x.has(ch));
+const SU_ALWAYS=['gref','chauffe','accA','dec','plant','triage'];
+function tabSuivi(ch, body){ S.suOpen=S.suOpen||{}; const PS=phaseSummaries(ch); const ph=SU_PHASES.filter(x=>x.has(ch)||SU_ALWAYS.includes(x.k)); const empty=x=>!x.has(ch);
   body.innerHTML=`<div id="su-share"></div>
     <h3 class="secttl">${esc(L('Toutes les étapes, dans l\'ordre','Todas las etapas, en orden'))}</h3><p class="note" style="margin:-8px 2px 0">${esc(L('Touche une étape pour ouvrir ou fermer son détail.','Toca una etapa para abrir o cerrar su detalle.'))}</p>
-    ${ph.map(x=>`<details class="fold sufold" data-suf="${x.k}" id="su-${x.k}"${S.suOpen[x.k]?' open':''}><summary class="surow"><span class="sui">${x.ic}</span><span class="sut"><b>${ph.indexOf(x)+1}. ${esc(L(x.fr,x.es))}</b><small>${esc(PS[x.k]||'')}</small></span><span class="sua">›</span></summary><div class="foldin">${x.k==='chauffe'?'<div id="su-ch" class="tabpart"></div>':`<div class="paper supaper">${x.html(ch).replace(/§\.\d+\s?/g,'').replace(/§/g,'')}</div>${x.tab?`<button class="ghost" type="button" data-sutab="${x.tab}">${esc(L('Ouvrir l\'onglet ','Abrir la pestaña ')+L(x.fr,x.es))}</button>`:''}`}</div></details>`).join('')}`;
+    ${ph.map(x=>`<details class="fold sufold${empty(x)?' suempty':''}" data-suf="${x.k}" id="su-${x.k}"${S.suOpen[x.k]?' open':''}><summary class="surow"><span class="sui">${x.ic}</span><span class="sut"><b>${ph.indexOf(x)+1}. ${esc(x.k==='accA'&&empty(x)?L('Acclimatation','Aclimatación'):L(x.fr,x.es))}</b><small>${esc(empty(x)?L("Rien de noté pour l'instant","Nada anotado por ahora"):(PS[x.k]||''))}</small></span><span class="sua">›</span></summary><div class="foldin">${empty(x)&&x.k!=='chauffe'?`<p class="note">${esc(L("Rien n'est encore noté pour cette étape. Tout ce que tu notes dans l'onglet apparaîtra ici et dans le PDF.","Todavía no hay nada anotado para esta etapa. Lo que anotes en la pestaña aparecerá aquí y en el PDF."))}</p>${x.tab?`<button class="ghost" type="button" data-sutab="${x.tab}">${esc(L('Ouvrir l\'onglet ','Abrir la pestaña ')+(x.k==='accA'?L('Acclimatation','Aclimatación'):L(x.fr,x.es)))}</button>`:''}`:x.k==='chauffe'?'<div id="su-ch" class="tabpart"></div>':`<div class="paper supaper">${x.html(ch).replace(/§\.\d+\s?/g,'').replace(/§/g,'')}</div>${x.tab?`<button class="ghost" type="button" data-sutab="${x.tab}">${esc(L('Ouvrir l\'onglet ','Abrir la pestaña ')+L(x.fr,x.es))}</button>`:''}`}</div></details>`).join('')}`;
   tabHist(ch, $('su-ch'));
   const share=$('g-reg')&&$('g-reg').closest('.card'); if(share){ const h=share.querySelector('h3'); if(h) h.textContent=L('Registre complet (PDF) et partage','Registro completo (PDF) y compartir'); const pn=document.createElement('p'); pn.className='note'; pn.textContent=L("Le registre PDF reprend toutes les étapes, dans l'ordre, avec un sommaire.","El registro PDF incluye todas las etapas, en orden, con un índice."); share.insertBefore(pn, share.querySelector('.row')); $('su-share').appendChild(share); }
   body.querySelectorAll('.sufold').forEach(d=>{ const was=d.open; d.addEventListener('toggle',()=>{ S.suOpen[d.dataset.suf]=d.open; if(d.dataset.suf==='chauffe'&&d.open&&!was){ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); } }); });
