@@ -407,7 +407,7 @@ input::-webkit-date-and-time-value{text-align:left}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.52.0';
+const APP_VERSION = '2.53.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -2361,9 +2361,10 @@ function tabPlantation(ch, body){
       d.classList.add('editing');
       d.innerHTML=head+`<div class="two"><div class="field"><label for="ple-d">${esc(L('Date de plantation','Fecha de plantación'))}</label><div class="dh"><input id="ple-d" type="date" value="${esc(e&&e.date||todayIso())}">${hPick('ple-d',e&&e.dateH)}</div></div>
         <div class="field"><label for="ple-df">${esc(L('Fini le (si sur plusieurs jours)','Terminado el (si fue en varios días)'))}</label><div class="dh"><input id="ple-df" type="date" value="${esc(e&&e.dateFin||'')}">${hPick('ple-df',e&&e.dateFinH)}</div></div>
-        <div class="field"><label for="ple-nb">${esc(L('Plants plantés','Plantas plantadas'))}</label><input id="ple-nb" class="num" type="text" inputmode="numeric" value="${e&&e.nb!=null?esc(String(e.nb)):''}" placeholder="N°"></div></div>
+</div>
         <div class="field"><span class="lab">${esc(L('Palox plantés par jour','Palox plantados por día'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></span><div id="ple-pxj" class="pxj"></div><div class="sumbox" id="ple-pxs"></div><span class="ex">${esc(L("Une ligne par jour, de la date de plantation jusqu'à « Fini le ».","Una línea por día, desde la fecha de plantación hasta « Terminado el »."))}</span></div>
         <div class="field"><span class="lab">${esc(L('Lot entièrement planté ?','¿Lote plantado por completo?'))}</span><div class="seg" id="ple-fini" data-v="${e&&e.fini===false?'0':'1'}"><button type="button" data-v="1" aria-pressed="${!(e&&e.fini===false)}">${esc(L('Oui','Sí'))}</button><button type="button" data-v="0" aria-pressed="${!!(e&&e.fini===false)}">${esc(L('Non, il en reste','No, falta'))}</button></div><span class="ex">${esc(L("« Oui » : le lot sort de l'acclimatation à la date de fin. « Non » : il y reste avec les palox pas encore plantés.","« Sí »: el lote sale de la aclimatación en la fecha de fin. « No »: se queda con los palox aún no plantados."))}</span></div>
+        <div class="field"><label for="ple-nb" id="ple-nbl"></label><input id="ple-nb" class="num" type="text" inputmode="numeric" value="${e&&e.nb!=null?esc(String(e.nb)):''}" placeholder="N°"><div class="sumbox" id="ple-nbx"></div></div>
         <div class="field"><label for="ple-p">${esc(L('Parcelle','Parcela'))}</label><input id="ple-p" type="text" list="pl-parcs" value="${esc(e?e.cible||'':last.cible||'')}" placeholder="${esc(L('Ex. : Parcelle du bas, rangs 1 à 12','Ej.: Parcela de abajo, hileras 1 a 12'))}"></div>
         <div class="field"><label for="ple-r">${esc(L('Remarques','Observaciones'))}</label><input id="ple-r" type="text" value="${esc(e?e.remarque||'':'')}" placeholder="${esc(L('Ex. : sol bien humide, plantation à la machine','Ej.: suelo bien húmedo, plantación a máquina'))}"></div>
         <div class="row"><button class="primary" type="button" id="ple-ok">${esc(L('Enregistrer','Guardar'))}</button><button class="ghost" type="button" id="ple-x">${esc(L('Annuler','Cancelar'))}</button></div>
@@ -2379,7 +2380,11 @@ function tabPlantation(ch, body){
           box.querySelectorAll('input').forEach(i=>i.addEventListener('input',upd)); upd(); };
         drawPx(); ['ple-d','ple-df'].forEach(id=>$(id).addEventListener('change',drawPx));
         d._px=()=>{ const out={}; let bad=false; $('ple-pxj').querySelectorAll('input').forEach(i=>{ const t=i.value.trim(); if(!t) return; const v=num(t); if(v==null||v<0) bad=true; else out[i.dataset.d]=v; }); return bad?null:out; }; }
-      { const fs=$('ple-fini'); fs.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{ fs.dataset.v=bt.dataset.v; fs.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===bt)); }); }
+      { const fs=$('ple-fini'); const q=Number(l.qte)||0;
+        const nbUpd=()=>{ const fini=fs.dataset.v!=='0'; $('ple-nbl').innerHTML=esc(fini?L('Plants plantés au total (lot fini)','Plantas plantadas en total (lote terminado)'):L("Plants plantés jusqu'ici","Plantas plantadas hasta ahora"))+' <span class="hint">'+esc(L('(facult.)','(opc.)'))+'</span>';
+          const n=num($('ple-nb').value); $('ple-nbx').innerHTML=q?(n>0?'<b>'+esc(pct(n/q))+'</b> '+esc(L('des ','de las ')+fmtN(q)+L(' plants greffés',' plantas injertadas')+(n<q?' · '+fmtN(q-n)+L(' non plantés',' no plantadas'):'')):esc(L('Plants greffés du lot : ','Plantas injertadas del lote: ')+fmtN(q))):esc(fini?L('Compte les plants mis en terre pour ce lot.','Cuenta las plantas puestas en tierra para este lote.'):''); };
+        fs.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{ fs.dataset.v=bt.dataset.v; fs.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===bt)); nbUpd(); });
+        $('ple-nb').addEventListener('input',nbUpd); nbUpd(); }
       $('ple-x').onclick=()=>{ S.plEdit=null; renderChauffe(); };
       $('ple-ok').onclick=async()=>{ const date=$('ple-d').value, nbs=$('ple-nb').value.trim(), nb=num(nbs);
         if(!date){ $('ple-st').textContent=L('Indique la date de plantation.','Indica la fecha de plantación.'); $('ple-st').className='status err'; return; }
@@ -2391,7 +2396,7 @@ function tabPlantation(ch, body){
       if($('ple-del')){ let c=false; $('ple-del').onclick=async()=>{ if(!c){ c=true; $('ple-del').textContent=L('Toucher encore pour effacer','Tocar otra vez para borrar'); return; } await removeEntry(e); S.plEdit=null; toast(L('Plantation effacée.','Plantación borrada.')); renderChauffe(); }; }
       setTimeout(()=>{ d.scrollIntoView({block:'center'}); },30);
       return; }
-    d.innerHTML=head+(e?`<div class="rem">🌾 ${esc([dRangeTxt(e.date,e.dateFin,L('Planté le ','Plantado el '),L('Planté du ','Plantado del '),e.dateH,e.dateFinH)+(e.fini===false?' ('+L('en cours','en curso')+')':''), e.nb!=null?fmtN(e.nb)+' '+L('plants','plantas'):'', plPxTxt(e), e.cible].filter(Boolean).join(' · '))}</div>${plPxReste(ch,l.lot)>0?`<div class="hint plrest">${esc(L('Reste à planter : ','Falta plantar: ')+fmtN(plPxReste(ch,l.lot))+' palox')}</div>`:''}${e.remarque?`<div class="hint">${esc(e.remarque)}</div>`:''}<div class="who">${esc(authorName(e))}</div>`:`<div class="rem">${esc(L('Pas encore planté.','Todavía no plantado.')+(plPxDispo(ch,l.lot)?' · '+fmtN(plPxDispo(ch,l.lot))+' '+L('palox à planter','palox por plantar'):''))}</div>`);
+    d.innerHTML=head+(e?`<div class="rem">🌾 ${esc([dRangeTxt(e.date,e.dateFin,L('Planté le ','Plantado el '),L('Planté du ','Plantado del '),e.dateH,e.dateFinH)+(e.fini===false?' ('+L('en cours','en curso')+')':''), e.nb!=null?fmtN(e.nb)+' '+L('plants plantés','plantas plantadas')+(l.qte?' '+L('sur ','de ')+fmtN(l.qte)+' ('+pct(e.nb/l.qte)+')':''):'', plPxTxt(e), e.cible].filter(Boolean).join(' · '))}</div>${plPxReste(ch,l.lot)>0?`<div class="hint plrest">${esc(L('Reste à planter : ','Falta plantar: ')+fmtN(plPxReste(ch,l.lot))+' palox')}</div>`:''}${e.remarque?`<div class="hint">${esc(e.remarque)}</div>`:''}<div class="who">${esc(authorName(e))}</div>`:`<div class="rem">${esc(L('Pas encore planté.','Todavía no plantado.')+(plPxDispo(ch,l.lot)?' · '+fmtN(plPxDispo(ch,l.lot))+' '+L('palox à planter','palox por plantar'):''))}</div>`);
     const b=document.createElement('button'); b.type='button'; b.className='ghost'; b.textContent=e?L('Modifier','Modificar'):L('Noter la plantation','Anotar la plantación'); b.onclick=()=>{ S.plEdit={chId:ch.id, lot:l.lot}; renderChauffe(); };
     d.appendChild(b); el.appendChild(d); });
   $('pl-add').onclick=()=>{ const lot=$('pl-nl').value.trim(); if(!lot){ $('pl-nl').focus(); return; } S.plEdit={chId:ch.id, lot}; renderChauffe(); };
@@ -2676,7 +2681,8 @@ function miniSynth(ch,t){ const lots=ch.lots||[]; const r2=v=>Math.round(v*100)/
   if(t==='frigo'){ const F=frigoSum(ch); const T=frigoTemps(ch).filter(r=>r.t!=null); const lt=T[T.length-1];
     add(L('Au frigo','En el frigorífico'),F.inn.length+' palox'); add(L('Sortis','Salidos'),F.out.length); if(F.avg!=null) add(L('Temps moyen','Tiempo prom.'),durTxt(F.avg)); if(lt) add(L('Dernière T°','Última T°'),fmtN(lt.t)+' °C',frigoTOut(ch,lt.t)?'bad':''); }
   if(t==='plant'){ const withPx=lots.filter(l=>plPxDispo(ch,l.lot)>0); const rest=sum(withPx,l=>plPxReste(ch,l.lot)); const tday=sum(plLots(ch),e=>e.pxJours&&e.pxJours[todayIso()]);
-    add(L('Reste à planter','Falta plantar'),withPx.length?fmtN(rest)+' palox':''); add(L("Plantés aujourd'hui","Plantados hoy"),fmtN(tday)+' palox'); add(L('Lots plantés','Lotes plantados'),lots.filter(l=>plLotOf(ch,l.lot)).length+' / '+lots.length); }
+    add(L('Reste à planter','Falta plantar'),withPx.length?fmtN(rest)+' palox':''); add(L("Plantés aujourd'hui","Plantados hoy"),fmtN(tday)+' palox'); add(L('Lots plantés','Lotes plantados'),lots.filter(l=>plLotOf(ch,l.lot)).length+' / '+lots.length);
+    { const fin=plLots(ch).filter(e=>plFini(e)&&e.nb>0); if(fin.length){ const n=fin.reduce((a,e)=>a+Number(e.nb),0); const q=fin.reduce((a,e)=>{ const l=lots.find(x=>String(x.lot)===String(e.lot)); return a+(l&&l.qte?Number(l.qte):0); },0); add(L('Plants plantés (lots finis)','Plantas plantadas (lotes terminados)'),fmtN(n)+(q?' · '+pct(n/q):'')); } } }
   if(t==='bilan'){ const tri=lotsWithBilan(ch).filter(l=>bilanRate(l.b)!=null); const ag=aggRate(tri);
     add(L('Lots triés','Lotes seleccionados'),tri.length+' / '+lots.length); if(ag.rate!=null) add(L('Réussite générale','Éxito general'),pct(ag.rate),ag.rate<0.7?'warn':'ok'); if(ag.tries) add(L('Plants triés','Plantas seleccionadas'),fmtN(ag.tries)); }
   return out; }
