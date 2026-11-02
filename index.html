@@ -453,7 +453,7 @@ button.big{min-height:60px;font-size:18px}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.63.0';
+const APP_VERSION = '2.64.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -2676,6 +2676,23 @@ function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const y=window.s
 /* PLAN DE LA PARCELLE (pas à l'échelle) : buttes de gauche à droite depuis le côté de départ,
    chaque butte découpée dans l'ordre de plantation (aller ↑ : le 1er lot est en bas ; retour ↓ : en haut).
    Un trait noir qui dépasse = une étiquette (changement de lot). */
+/* Motifs pour l'impression en noir et blanc : un motif différent par lot */
+function ppPat(id,i){ const P=[
+  '<rect width="8" height="8" fill="#fff"/>',
+  '<rect width="8" height="8" fill="#fff"/><path d="M-2 2l4-4M0 8l8-8M6 10l4-4" stroke="#000" stroke-width="1.4"/>',
+  '<rect width="8" height="8" fill="#fff"/><circle cx="4" cy="4" r="1.5" fill="#000"/>',
+  '<rect width="8" height="8" fill="#fff"/><path d="M0 4h8" stroke="#000" stroke-width="1.6"/>',
+  '<rect width="8" height="8" fill="#fff"/><path d="M4 0v8" stroke="#000" stroke-width="1.6"/>',
+  '<rect width="8" height="8" fill="#fff"/><path d="M0 4h8M4 0v8" stroke="#000" stroke-width="1.1"/>',
+  '<rect width="8" height="8" fill="#9a9a9a"/>',
+  '<rect width="8" height="8" fill="#fff"/><path d="M-2 6l4 4M0 0l8 8M6 -2l4 4" stroke="#000" stroke-width="1.4"/>',
+  '<rect width="8" height="8" fill="#fff"/><path d="M-2 2l4-4M0 8l8-8M6 10l4-4M-2 6l4 4M0 0l8 8M6 -2l4 4" stroke="#000" stroke-width=".9"/>',
+  '<rect width="8" height="8" fill="#3a3a3a"/>',
+  '<rect width="8" height="8" fill="#fff"/><circle cx="2" cy="2" r="1.1" fill="#000"/><circle cx="6" cy="6" r="1.1" fill="#000"/>',
+  '<rect width="8" height="8" fill="#d0d0d0"/><path d="M0 4h8" stroke="#000" stroke-width="1.2"/>'];
+  return `<pattern id="${id}" width="8" height="8" patternUnits="userSpaceOnUse">${P[i%P.length]}</pattern>`; }
+const ppPatIdx=(ch,k)=>{ const col=ppColors(ch); return Object.keys(col).indexOf(k); };
+function ppSwatch(ch,k){ const i=ppPatIdx(ch,k); return `<svg width="34" height="18" viewBox="0 0 34 18" style="flex:none"><defs>${ppPat('sw'+i,i)}</defs><rect x=".5" y=".5" width="33" height="17" rx="3" fill="url(#sw${i})" stroke="#000"/></svg>`; }
 const ppRight=(ch,parc)=>/droit|derech|right/i.test(ppDepart(ch,parc));
 /* opt : {fit:true → largeur 100 % (impression), labels:false → pas de numéros dans les buttes, nums:false → pas de numéros de buttes} */
 function ppPlanSVG(ch, parc, hl, opt){ opt=opt||{}; const pass=ppPass(ch,parc); if(!pass.length) return ''; const LB=ppLab(ch); const col=ppColors(ch); const R=ppRight(ch,parc);
@@ -2686,15 +2703,17 @@ function ppPlanSVG(ch, parc, hl, opt){ opt=opt||{}; const pass=ppPass(ch,parc); 
     g+=`<text x="${xa+(3*bw+2*gap)/2}" y="12" text-anchor="middle" class="pps">${'P'+e.n+' '+(up?'↑':'↓')}</text>`;
     [0,1,2].forEach(i=>{ const b=ppButte(e,i), X=x(b), seq=((e.b||[])[i]||[]);
       if(!seq.length){ g+=`<rect x="${X}" y="${T}" width="${bw}" height="${H}" rx="4" fill="none" stroke="#9a948a" stroke-dasharray="4 3"/>`; }
-      else { const h=H/seq.length;
-        seq.forEach((xx,k)=>{ const key=ppXK(xx,e); const pos=up?seq.length-1-k:k; const Y=T+pos*h; const dim=hl&&hl!==key;
-          g+=`<rect x="${X}" y="${Y}" width="${bw}" height="${h}" fill="${col[key]||'#4a4278'}"${dim?' opacity=".18"':''}/>`;
-          const lab=LB.chip(key); if(opt.labels!==false&&h>=lab.length*7.5+10) g+=`<text transform="translate(${X+bw/2},${Y+h/2}) rotate(-90)" text-anchor="middle" dominant-baseline="central" class="ppsl"${dim?' opacity=".3"':''}>${esc(lab)}</text>`; });
-        for(let k=1;k<seq.length;k++){ const Y=T+k*h; g+=`<line x1="${X-3}" x2="${X+bw+3}" y1="${Y}" y2="${Y}" stroke="#111" stroke-width="2.2"/>`; }
-        g+=`<rect x="${X}" y="${T}" width="${bw}" height="${H}" rx="4" fill="none" stroke="rgba(0,0,0,.25)"/>`; }
+      else { const n=seq.length, GP=n>1?10:0, h=(H-GP*(n-1))/n;
+        seq.forEach((xx,k)=>{ const key=ppXK(xx,e); const pos=up?n-1-k:k; const Y=T+pos*(h+GP); const dim=hl&&hl!==key;
+          const fill=opt.bw?`url(#pp-pat${ppPatIdx(ch,key)})`:(col[key]||'#4a4278');
+          g+=`<rect x="${X}" y="${Y}" width="${bw}" height="${h}" rx="3" fill="${fill}" stroke="${opt.bw?'#000':'rgba(0,0,0,.25)'}"${opt.bw?' stroke-width="1.2"':''}${dim?' opacity=".18"':''}/>`;
+          const lab=LB.chip(key); if(opt.labels!==false&&h>=lab.length*7.5+12){ if(opt.bw) g+=`<rect x="${X+bw/2-8}" y="${Y+h/2-(lab.length*7+6)/2}" width="16" height="${lab.length*7+6}" rx="3" fill="#fff" stroke="#000" stroke-width=".8"/>`;
+            g+=`<text transform="translate(${X+bw/2},${Y+h/2}) rotate(-90)" text-anchor="middle" dominant-baseline="central" class="ppsl"${opt.bw?' style="fill:#000"':''}${dim?' opacity=".3"':''}>${esc(lab)}</text>`; } });
+        for(let k=1;k<n;k++){ const Y=T+k*(h+GP)-GP/2; g+=`<line x1="${X-4}" x2="${X+bw+4}" y1="${Y}" y2="${Y}" stroke="#111" stroke-width="2.2"/>`; } }
       if(opt.nums!==false&&(N<=40||b%5===0||b===1)) g+=`<text x="${X+bw/2}" y="${T+H+16}" text-anchor="middle" class="pps">${b}</text>`; }); });
   const size=opt.fit?`width="100%" style="max-height:165mm;print-color-adjust:exact;-webkit-print-color-adjust:exact"`:`width="${W}" height="${T+H+B}" style="print-color-adjust:exact;-webkit-print-color-adjust:exact"`;
-  return `<svg viewBox="0 0 ${W} ${T+H+B}" ${size} class="ppplan" role="img" aria-label="${esc(L('Plan de la parcelle ','Plano de la parcela ')+parc)}">${g}</svg>`; }
+  const defs=opt.bw?'<defs>'+Object.keys(col).map((k,i)=>ppPat('pp-pat'+i,i)).join('')+'</defs>':'';
+  return `<svg viewBox="0 0 ${W} ${T+H+B}" ${size} class="ppplan" role="img" aria-label="${esc(L('Plan de la parcelle ','Plano de la parcela ')+parc)}">${defs}${g}</svg>`; }
 function ppPlanCardHTML(ch, print){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch,pc).length); if(!parcs.length) return ''; const LB=ppLab(ch); const col=ppColors(ch); const W=ppWhere(ch);
   return parcs.map(pc=>{ const ks=Object.keys(W).filter(k=>W[k].some(x=>x.parc===pc)).sort(ppSortK); const hl=print?null:(S.ppHl&&ks.includes(S.ppHl)?S.ppHl:null);
     const legend=ks.map(k=>{ const pe=(()=>{ const {c,lot}=ppKs(k); return plLotOf({id:c},lot); })(); return `<${print?'div':'button type="button"'} class="pplg${hl===k?' on':''}" data-hl="${esc(k)}"><span class="pplot" style="background:${col[k]}">${esc(LB.chip(k))}</span><span>${esc([LB.info(k), ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,'')].filter(Boolean).join(' — '))}${pe&&plFini(pe)?' ✓':''}</span></${print?'div':'button'}>`; }).join('');
@@ -2711,10 +2730,10 @@ async function ppSetSide(ch, parc, v){ const dep=v==='droite'?L('droite','derech
   if(!done){ await saveChauffe(Object.assign({},ch,{plparcs:(ch.plparcs||[]).concat([{nom:parc, depart:dep}])})); } }
 /* Page d'impression du plan : plan + légende, écritures au choix */
 function renderPlanPrint(){ const ch=curChauffe(); const pc=S.ppPrintParc; if(!ch||!pc){ return go('chauffe',{tab:'hist'}); }
-  const o=S.ppPO=S.ppPO||{labels:true, nums:true, vari:true, where:false, title:true};
+  const o=S.ppPO=S.ppPO||{bw:true, labels:true, nums:true, vari:true, where:false, title:true};
   const LB=ppLab(ch); const col=ppColors(ch); const W=ppWhere(ch); const ks=Object.keys(W).filter(k=>W[k].some(x=>x.parc===pc)).sort(ppSortK);
-  const legend=ks.map(k=>`<div class="pplgp"><span class="pplot" style="background:${col[k]};print-color-adjust:exact;-webkit-print-color-adjust:exact">${esc(LB.chip(k))}</span>${o.vari&&LB.info(k)?`<span>${esc(LB.info(k))}</span>`:''}${o.where?`<small>${esc(ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,''))}</small>`:''}</div>`).join('');
-  const opts=[['title',L('Titre','Título')],['labels',L('Numéros dans les buttes','Números en los camellones')],['nums',L('Numéros des buttes','Números de camellones')],['vari',L('Variété / porte-greffe','Variedad / portainjerto')],['where',L('Buttes de chaque lot','Camellones de cada lote')]];
+  const legend=ks.map(k=>`<div class="pplgp">${o.bw?ppSwatch(ch,k)+`<b style="font-size:15px">${esc(LB.chip(k))}</b>`:`<span class="pplot" style="background:${col[k]};print-color-adjust:exact;-webkit-print-color-adjust:exact">${esc(LB.chip(k))}</span>`}${o.vari&&LB.info(k)?`<span>${esc(LB.info(k))}</span>`:''}${o.where?`<small>${esc(ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,''))}</small>`:''}</div>`).join('');
+  const opts=[['bw',L('Noir et blanc (un motif par lot)','Blanco y negro (un motivo por lote)')],['title',L('Titre','Título')],['labels',L('Numéros dans les buttes','Números en los camellones')],['nums',L('Numéros des buttes','Números de camellones')],['vari',L('Variété / porte-greffe','Variedad / portainjerto')],['where',L('Buttes de chaque lot','Camellones de cada lote')]];
   app.innerHTML=`<style>@media print{@page{size:landscape;margin:8mm}}</style><header class="top noprint"><div class="title-row"><div class="left"><button class="back" id="r-back" type="button" aria-label="Retour">‹</button><h1>${esc(L('Imprimer le plan','Imprimir el plano'))}</h1></div></div></header>
   <section class="panel">
     <div class="card noprint" style="gap:10px"><span class="lab">${esc(L('Ce qui est écrit sur la feuille','Lo que se escribe en la hoja'))}</span>
@@ -2723,7 +2742,7 @@ function renderPlanPrint(){ const ch=curChauffe(); const pc=S.ppPrintParc; if(!c
       <p class="note">${esc(L("La feuille s'imprime en paysage. Sur iPad : « Imprimer / PDF », puis Partager (⬆︎) pour garder le PDF.","La hoja se imprime en horizontal. En iPad: « Imprimir / PDF », luego Compartir (⬆︎) para guardar el PDF."))}</p><div class="status" id="r-st"></div></div>
     <article class="paper ppsheet" id="reg">
       ${o.title?`<h2 style="margin:0 0 2px;font-size:20px">${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h2><p class="small" style="margin:0 0 8px">${esc(ppGroup(ch).map(c=>c.nom).join(', ')+' · '+L('départ ','inicio ')+(ppRight(ch,pc)?L('à droite','a la derecha'):L('à gauche','a la izquierda'))+' · '+L('pas à l\'échelle','no a escala')+' · '+isoFr(todayIso()))}</p>`:''}
-      ${ppPlanSVG(ch,pc,null,{fit:true, labels:o.labels, nums:o.nums})}
+      ${ppPlanSVG(ch,pc,null,{fit:true, bw:o.bw, labels:o.labels, nums:o.nums})}
       <div class="pplgsp">${legend}</div>
     </article></section>`;
   $('r-back').onclick=()=>go('chauffe',{tab:'hist'});
