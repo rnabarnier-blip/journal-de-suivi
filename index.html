@@ -422,6 +422,12 @@ input::-webkit-date-and-time-value{text-align:left}
 .pprowl{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:14.5px}.pprowl:first-of-type{border-top:0}
 .pprowl span:not(.pplot){flex:1;min-width:0}.pprowl .ppfin{min-height:38px;padding:4px 10px;font-size:14px;white-space:nowrap}
 button.big{min-height:60px;font-size:18px}
+.ppplanw{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.ppplan{display:block;max-width:none;color:var(--muted)}.ppplan .pps{font:600 11px var(--f-body);fill:var(--muted)}.ppplan .ppsl{font:700 11px var(--f-mono);fill:#fff}
+.pplgs{display:grid;gap:4px}
+.pplg{display:flex;align-items:flex-start;gap:8px;text-align:left;padding:6px 8px;border-radius:10px;border:1px solid transparent;background:none;font-size:14px;color:var(--fg);min-height:0}
+.pplg.on{border-color:var(--accent);background:var(--accent-soft)}
+@media print{.ppplan .pps{fill:#555}}
 </style>
 </head>
 <body>
@@ -442,7 +448,7 @@ button.big{min-height:60px;font-size:18px}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.61.0';
+const APP_VERSION = '2.62.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1589,13 +1595,14 @@ const SU_PHASES=[
   {k:'phyto', ic:'🧪', fr:'Tous les traitements', es:'Todos los tratamientos', tab:null, has:ch=>allPhytos(ch).length>0, html:ch=>`<section>${phytoTableHTML(ch,true)}</section>`}];
 const SU_ALWAYS=['gref','chauffe','accA','dec','plant','triage'];
 function tabSuivi(ch, body){ S.suOpen=S.suOpen||{}; const PS=phaseSummaries(ch); const ph=SU_PHASES.filter(x=>x.has(ch)||SU_ALWAYS.includes(x.k)); const empty=x=>!x.has(ch);
-  body.innerHTML=`<div id="su-share"></div>
+  body.innerHTML=`<div id="su-share"></div>${(()=>{ try{ return ppPlanCardHTML(ch); }catch(e){ console.error(e); return ''; } })()}
     <h3 class="secttl">${esc(L('Toutes les étapes, dans l\'ordre','Todas las etapas, en orden'))}</h3><p class="note" style="margin:-8px 2px 0">${esc(L('Touche une étape pour ouvrir ou fermer son détail.','Toca una etapa para abrir o cerrar su detalle.'))}</p>
     ${ph.map(x=>`<details class="fold sufold${empty(x)?' suempty':''}" data-suf="${x.k}" id="su-${x.k}"${S.suOpen[x.k]?' open':''}><summary class="surow"><span class="sui">${x.ic}</span><span class="sut"><b>${ph.indexOf(x)+1}. ${esc(x.k==='accA'&&empty(x)?L('Acclimatation','Aclimatación'):L(x.fr,x.es))}</b><small>${esc(empty(x)?L("Rien de noté pour l'instant","Nada anotado por ahora"):(PS[x.k]||''))}</small></span><span class="sua">›</span></summary><div class="foldin">${empty(x)&&x.k!=='chauffe'?`<p class="note">${esc(L("Rien n'est encore noté pour cette étape. Tout ce que tu notes dans l'onglet apparaîtra ici et dans le PDF.","Todavía no hay nada anotado para esta etapa. Lo que anotes en la pestaña aparecerá aquí y en el PDF."))}</p>${x.tab?`<button class="ghost" type="button" data-sutab="${x.tab}">${esc(L('Ouvrir l\'onglet ','Abrir la pestaña ')+(x.k==='accA'?L('Acclimatation','Aclimatación'):L(x.fr,x.es)))}</button>`:''}`:x.k==='chauffe'?'<div id="su-ch" class="tabpart"></div>':`<div class="paper supaper">${x.html(ch).replace(/§\.\d+\s?/g,'').replace(/§/g,'')}</div>${x.tab?`<button class="ghost" type="button" data-sutab="${x.tab}">${esc(L('Ouvrir l\'onglet ','Abrir la pestaña ')+L(x.fr,x.es))}</button>`:''}`}</div></details>`).join('')}`;
   tabHist(ch, $('su-ch'));
   const share=$('g-reg')&&$('g-reg').closest('.card'); if(share){ const h=share.querySelector('h3'); if(h) h.textContent=L('Registre complet (PDF) et partage','Registro completo (PDF) y compartir'); const pn=document.createElement('p'); pn.className='note'; pn.textContent=L("Le registre PDF reprend toutes les étapes, dans l'ordre, avec un sommaire.","El registro PDF incluye todas las etapas, en orden, con un índice."); share.insertBefore(pn, share.querySelector('.row')); $('su-share').appendChild(share); }
   body.querySelectorAll('.sufold').forEach(d=>{ const was=d.open; d.addEventListener('toggle',()=>{ S.suOpen[d.dataset.suf]=d.open; if(d.dataset.suf==='chauffe'&&d.open&&!was){ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); } }); });
   body.querySelectorAll('[data-sutab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.sutab; renderChauffe(); window.scrollTo({top:0}); });
+  body.querySelectorAll('.pplg[data-hl]').forEach(b=>b.onclick=()=>{ const y=window.scrollY; S.ppHl=S.ppHl===b.dataset.hl?null:b.dataset.hl; renderChauffe(); window.scrollTo({top:y}); });
 }
 function tabHist(ch, body){
   const cb=comboSVG(ch,false,{mode:'sep',show:CB_DEFAULT.show});
@@ -2589,7 +2596,7 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
   // 4) lots plantés : où ils sont + « Lot fini »
   const W=ppWhere(ch); const wl=Object.keys(W).sort(ppSortK); const enC=wl.filter(k=>!plFini(plE(k))), finis=wl.filter(k=>plFini(plE(k)));
   const row=k=>{ const pe=plE(k); const fin=plFini(pe); return `<div class="pprowl">${chip(k)}<span>${esc(ppWhereTxt(W[k]).replace(/^[^:]*: /,''))}</span>${pe?`<button type="button" class="${fin?'linkbtn':'ghost'} ppfin" data-k="${esc(k)}">${esc(fin?L('rouvrir','reabrir'):L('Lot fini','Lote terminado'))}</button>`:''}</div>`; };
-  const lotsHTML=wl.length?`<div class="card" style="gap:6px"><b>${esc(L('Lots en cours','Lotes en curso'))}</b>${enC.length?enC.map(row).join(''):`<p class="hint" style="margin:0">${esc(L('Aucun.','Ninguno.'))}</p>`}
+  const lotsHTML=wl.length?`<div class="card" style="gap:6px"><div class="hhead"><b>${esc(L('Lots en cours','Lotes en curso'))}</b><button class="linkbtn" type="button" id="pp-plan">🗺️ ${esc(L('Voir le plan','Ver el plano'))}</button></div>${enC.length?enC.map(row).join(''):`<p class="hint" style="margin:0">${esc(L('Aucun.','Ninguno.'))}</p>`}
       ${finis.length?`<details class="gsec"><summary>${esc(L('Lots finis','Lotes terminados'))} (${finis.length})</summary><div class="gsecb">${finis.map(row).join('')}</div></details>`:''}</div>`:'';
   const passHTML=pass.length?`<details class="gsec"${S.ppListOpen?' open':''} id="pp-listd"><summary>${esc(L('Corriger un passage','Corregir una pasada'))} (${pass.length})</summary><div class="gsecb"><div class="pplist">${pass.slice().reverse().map(e=>`<button type="button" class="pprow${cur&&e.id===cur.id?' on':''}" data-id="${esc(e.id)}"><b>P${e.n}</b><span>${ppAller(e)?'↑':'↓'}</span>${[0,1,2].map(i=>`<span class="ppcell"><small>${ppButte(e,i)}</small>${((e.b||[])[i]||[]).map(x=>chip(ppXK(x,e))).join('')}</span>`).join('')}</button>`).join('')}</div></div></details>`:'';
   return `<div class="card ppcard" id="pp-card">${top}${remForm}${field}</div>${lotsHTML}${passHTML}`; }
@@ -2637,6 +2644,7 @@ function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const y=window.s
   if($('pp-start')) $('pp-start').onclick=async()=>{ const e={id:'pp-'+uid(), type:'plpass', chauffeId:ch.id, parc, n:1, date:S.ppDate, b:[[],[],[]], creeLe:nowIso(), auteurId:S.me.id, auteurNom:S.me.nom}; await ppSave(e); S.ppCur=e.id; S.ppSel=[true,true,true]; keep(); };
   document.querySelectorAll('.ppfin').forEach(b=>b.onclick=async()=>{ const {c,lot}=ppKs(b.dataset.k); const e=plLotOf({id:c},lot); if(!e) return; const fin=!plFini(e);
     await saveEntry(Object.assign({},e,{fini:fin, auteurId:S.me.id, auteurNom:S.me.nom})); toast(fin?L('Lot ','Lote ')+e.lot+L(' fini : il sort de l\'acclimatation.',' terminado: sale de la aclimatación.'):L('Lot ','Lote ')+e.lot+L(' de nouveau en cours.',' de nuevo en curso.')); keep(); });
+  if($('pp-plan')) $('pp-plan').onclick=()=>{ S.tab='hist'; renderChauffe(); window.scrollTo({top:0}); };
   if(!cur) return;
   document.querySelectorAll('#pp-card .ppb').forEach(b=>b.onclick=()=>{ const i=Number(b.dataset.i);
     if(S.ppSel.every(Boolean)) S.ppSel=[0,1,2].map(j=>j===i); else { S.ppSel[i]=!S.ppSel[i]; if(!S.ppSel.some(Boolean)) S.ppSel=[true,true,true]; } keep(); });
@@ -2656,10 +2664,37 @@ function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const y=window.s
   if($('pp-last')) $('pp-last').onclick=()=>{ S.ppCur=null; keep(); };
   if($('pp-listd')) $('pp-listd').addEventListener('toggle',()=>{ S.ppListOpen=$('pp-listd').open; });
   document.querySelectorAll('.pprow').forEach(b=>b.onclick=()=>{ S.ppCur=b.dataset.id; S.ppSel=[true,true,true]; renderChauffe(); setTimeout(()=>{ const c=$('pp-card'); if(c) c.scrollIntoView({block:'start'}); },30); }); }
+/* PLAN DE LA PARCELLE (pas à l'échelle) : buttes de gauche à droite depuis le côté de départ,
+   chaque butte découpée dans l'ordre de plantation (aller ↑ : le 1er lot est en bas ; retour ↓ : en haut).
+   Un trait noir qui dépasse = une étiquette (changement de lot). */
+function ppPlanSVG(ch, parc, hl, print){ const pass=ppPass(ch,parc); if(!pass.length) return ''; const LB=ppLab(ch); const col=ppColors(ch);
+  const N=Math.max(...pass.map(e=>ppButte(e,2))); const bw=N>40?18:N>20?22:28, gap=N>40?4:6, X0=8, T=30, H=print?220:260, B=26;
+  const W=X0*2+N*bw+(N-1)*gap; const x=b=>X0+(b-1)*(bw+gap);
+  let g='';
+  pass.forEach(e=>{ const up=ppAller(e);
+    g+=`<text x="${x(ppButte(e,0))+(3*bw+2*gap)/2}" y="12" text-anchor="middle" class="pps">${'P'+e.n+' '+(up?'↑':'↓')}</text>`;
+    [0,1,2].forEach(i=>{ const b=ppButte(e,i), X=x(b), seq=((e.b||[])[i]||[]);
+      if(!seq.length){ g+=`<rect x="${X}" y="${T}" width="${bw}" height="${H}" rx="4" fill="none" stroke="#9a948a" stroke-dasharray="4 3"/>`; }
+      else { const h=H/seq.length;
+        seq.forEach((xx,k)=>{ const key=ppXK(xx,e); const pos=up?seq.length-1-k:k; const Y=T+pos*h; const dim=hl&&hl!==key;
+          g+=`<rect x="${X}" y="${Y}" width="${bw}" height="${h}" fill="${col[key]||'#4a4278'}"${dim?' opacity=".18"':''}${k===0?'':''}/>`;
+          const lab=LB.chip(key); if(h>=lab.length*7.5+10) g+=`<text transform="translate(${X+bw/2},${Y+h/2}) rotate(-90)" text-anchor="middle" dominant-baseline="central" class="ppsl"${dim?' opacity=".3"':''}>${esc(lab)}</text>`; });
+        for(let k=1;k<seq.length;k++){ const Y=T+k*h; g+=`<line x1="${X-3}" x2="${X+bw+3}" y1="${Y}" y2="${Y}" stroke="#111" stroke-width="2.2"/>`; }
+        g+=`<rect x="${X}" y="${T}" width="${bw}" height="${H}" rx="4" fill="none" stroke="rgba(0,0,0,.25)"/>`; }
+      if(N<=40||b%5===0||b===1) g+=`<text x="${X+bw/2}" y="${T+H+16}" text-anchor="middle" class="pps">${b}</text>`; }); });
+  return `<svg viewBox="0 0 ${W} ${T+H+B}" width="${W}" height="${T+H+B}" class="ppplan" role="img" aria-label="${esc(L('Plan de la parcelle ','Plano de la parcela ')+parc)}" style="print-color-adjust:exact;-webkit-print-color-adjust:exact">${g}</svg>`; }
+function ppPlanCardHTML(ch, print){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch,pc).length); if(!parcs.length) return ''; const LB=ppLab(ch); const col=ppColors(ch); const W=ppWhere(ch);
+  return parcs.map(pc=>{ const ks=Object.keys(W).filter(k=>W[k].some(x=>x.parc===pc)).sort(ppSortK); const hl=print?null:(S.ppHl&&ks.includes(S.ppHl)?S.ppHl:null);
+    const legend=ks.map(k=>{ const pe=(()=>{ const {c,lot}=ppKs(k); return plLotOf({id:c},lot); })(); return `<${print?'div':'button type="button"'} class="pplg${hl===k?' on':''}" data-hl="${esc(k)}"><span class="pplot" style="background:${col[k]}">${esc(LB.chip(k))}</span><span>${esc([LB.info(k), ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,'')].filter(Boolean).join(' — '))}${pe&&plFini(pe)?' ✓':''}</span></${print?'div':'button'}>`; }).join('');
+    const svg=ppPlanSVG(ch,pc,hl,print);
+    return print?`<p class="small" style="margin:10px 0 4px"><b>${esc(L('Plan : ','Plano: ')+pc)}</b> · ${esc(L('départ côté ','inicio lado ')+ppDepart(ch,pc)+L(' (à gauche du plan), pas à l\'échelle',' (a la izquierda del plano), no a escala'))}</p><div style="overflow:hidden">${svg}</div><div class="pplgs">${legend}</div>`
+    :`<div class="card" style="gap:10px"><div class="hhead"><h3 class="ctitle" style="margin:0">🗺️ ${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h3></div>
+      <p class="note" style="margin:0">${esc(L('Pas à l\'échelle. Buttes de gauche à droite depuis le côté de départ (','No a escala. Camellones de izquierda a derecha desde el lado de inicio (')+ppDepart(ch,pc)+L('). Trait noir = étiquette (changement de lot). Touche un lot pour le surligner.','). Raya negra = etiqueta (cambio de lote). Toca un lote para resaltarlo.'))}</p>
+      <div class="ppplanw">${svg}</div><div class="pplgs">${legend}</div></div>`; }).join(''); }
 function ppRegistreHTML(ch){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch,pc).length); if(!parcs.length) return ''; const W=ppWhere(ch); const LB=ppLab(ch);
   const mine=Object.keys(W).filter(k=>ppKs(k).c===ch.id).sort(ppSortK);
   const lab=k=>LB.chip(k);
-  return `${mine.length?`<p class="small" style="margin:12px 0 4px"><b>${esc(L('Plantation sur le terrain – où sont les lots','Plantación en el terreno – dónde están los lotes'))}</b></p><div class="scrollx"><table><thead><tr><th>${esc(L('Lot','Lote'))}</th><th>${esc(L('Variété / porte-greffe','Variedad / portainjerto'))}</th><th>${esc(L('Emplacement','Ubicación'))}</th></tr></thead><tbody>${mine.map(k=>`<tr><td>${esc(ppKs(k).lot)}</td><td>${esc([LB.l(k).variete,LB.l(k).pg].filter(Boolean).join(' / '))}</td><td>${esc(ppWhereTxt(W[k]))}</td></tr>`).join('')}</tbody></table></div>`:''}
+  return `${ppPlanCardHTML(ch,true)}${mine.length?`<p class="small" style="margin:12px 0 4px"><b>${esc(L('Plantation sur le terrain – où sont les lots','Plantación en el terreno – dónde están los lotes'))}</b></p><div class="scrollx"><table><thead><tr><th>${esc(L('Lot','Lote'))}</th><th>${esc(L('Variété / porte-greffe','Variedad / portainjerto'))}</th><th>${esc(L('Emplacement','Ubicación'))}</th></tr></thead><tbody>${mine.map(k=>`<tr><td>${esc(ppKs(k).lot)}</td><td>${esc([LB.l(k).variete,LB.l(k).pg].filter(Boolean).join(' / '))}</td><td>${esc(ppWhereTxt(W[k]))}</td></tr>`).join('')}</tbody></table></div>`:''}
     ${parcs.map(pc=>`<p class="small" style="margin:10px 0 4px"><b>${esc(pc)}</b> · ${esc(L('départ côté ','inicio lado ')+ppDepart(ch,pc))}${LB.multi?' · '+esc(L('toutes saisons : ','todas las temporadas: ')+ppGroup(ch).map(c=>c.nom+(ppShort(c.nom)!==c.nom?' ('+ppShort(c.nom)+')':'')).join(', ')):''}</p><div class="scrollx"><table><thead><tr><th>${esc(L('Passage','Pasada'))}</th><th>${esc(L('Date','Fecha'))}</th><th>${esc(L('Buttes','Camellones'))}</th><th>${esc(L('Lots (dans le sens de plantation)','Lotes (en el sentido de plantación)'))}</th></tr></thead><tbody>${ppPass(ch,pc).map(e=>`<tr><td>${e.n} ${ppAller(e)?'↑':'↓'}</td><td>${esc(isoFr(e.date))}</td><td>${ppButte(e,0)}–${ppButte(e,2)}</td><td>${esc([0,1,2].map(i=>ppButte(e,i)+' : '+(((e.b||[])[i]||[]).map(x=>LB.multi&&(x.c||e.chauffeId)!==ch.id?lab(ppXK(x,e))+'*':lab(ppXK(x,e))).join(' → ')||'—')).join(' · '))}</td></tr>`).join('')}</tbody></table></div>${LB.multi?`<p class="hint">${esc(L('* lot d\'une autre saison du dossier','* lote de otra temporada de la carpeta'))}</p>`:''}`).join('')}`; }
 function plantRegistreHTML(ch){
   const pl=plLots(ch).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||String(a.lot).localeCompare(String(b.lot),undefined,{numeric:true})); const ops=plOps(ch);
