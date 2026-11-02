@@ -433,6 +433,13 @@ button.big{min-height:60px;font-size:18px}
 .pplgsp{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 14px;margin-top:10px}
 .pplgp{display:flex;align-items:flex-start;gap:6px;font-size:13px;flex-wrap:wrap;break-inside:avoid;align-content:flex-start}.pplgp small{width:100%;color:#555;font-size:11.5px}
 @media print{.ppsheet{max-width:none}.pplgsp{grid-template-columns:repeat(4,1fr)}}
+.pcrow2{display:flex;gap:8px;align-items:center}
+.pctog{flex:1;display:flex;align-items:center;gap:10px;min-height:46px;padding:6px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);text-align:left;font-size:15px}
+.pctog span:last-child{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pctog[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.pcbox{flex:none;width:24px;height:24px;border-radius:6px;border:2px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:800;color:#fff}
+.pctog[aria-pressed="true"] .pcbox{background:var(--accent);border-color:var(--accent)}
+.pcrow2 input.num{width:84px;flex:none}
 </style>
 </head>
 <body>
@@ -453,7 +460,7 @@ button.big{min-height:60px;font-size:18px}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.64.0';
+const APP_VERSION = '2.65.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -2545,7 +2552,8 @@ const ppLotInfo=(ch,lot)=>(ch.lots||[]).find(l=>String(l.lot)===String(lot))||{}
 const ppSai=c=>{ const ch=liveChauffes().find(x=>x.id===c); return ch?ch.nom:''; };
 const ppShort=nom=>{ const w=String(nom||'').trim().split(/\s+/).filter(Boolean); if(!w.length) return '?'; return w.map(x=>/^\d/.test(x)?x:x[0].toUpperCase()).join('').slice(0,6); };
 /* Tous les lots des saisons du groupe : [{k, lot, c, l, sai}] */
-function ppAllLots(ch){ return [].concat(...ppGroup(ch).map(c=>(c.lots||[]).map(l=>({k:ppK(c.id,String(l.lot)), lot:String(l.lot), c:c.id, l, sai:c.nom})))); }
+const ppLotCmp=(a,b)=>String(a.lot).localeCompare(String(b.lot),undefined,{numeric:true});
+function ppAllLots(ch){ return [].concat(...ppGroup(ch).slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),undefined,{numeric:true})).map(c=>(c.lots||[]).slice().sort(ppLotCmp).map(l=>({k:ppK(c.id,String(l.lot)), lot:String(l.lot), c:c.id, l, sai:c.nom})))); }
 function ppLab(ch){ const multi=ppGroup(ch).length>1; const AL=ppAllLots(ch); const cnt={}; AL.forEach(x=>cnt[x.lot]=(cnt[x.lot]||0)+1);
   const by={}; AL.forEach(x=>by[x.k]=x);
   return { multi,
@@ -2582,19 +2590,20 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
   const top=`<div class="pptop">
       <label class="ppchip">📅 <span>${esc(dateTxt)}</span><input id="pp-date" type="date" value="${esc(D)}" aria-label="${esc(L('Date','Fecha'))}"></label>
       <label class="ppchip">📍 <select id="pp-parc">${parcs.map(p=>`<option value="${esc(p)}"${p===parc?' selected':''}>${esc(p)}</option>`).join('')}<option value="+new">${esc(L('+ Nouvelle parcelle','+ Nueva parcela'))}</option></select></label>
-      <button type="button" class="ppchip" id="pc-open">🚜 ${loadedL.length?loadedL.map(x=>esc(LB.chip(x.k))).join(' · '):esc(L('Remorque','Remolque'))}</button></div>`;
+      <button type="button" class="ppchip" id="pc-open">🚜 ${loadedL.length?loadedL.slice().sort((a,b)=>ppSortK(a.k,b.k)).map(x=>esc(LB.chip(x.k))).join(' · '):esc(L('Remorque','Remolque'))}</button></div>`;
   const chForm=S.ppCharge===ch.id;
-  const remForm=chForm?`<div class="card" style="gap:8px;background:var(--sunk)" id="pc-form"><b>${esc(L('Sur la remorque','En el remolque'))}</b><p class="hint" style="margin:0">${esc(L('Coche les lots chargés. Les palox sont facultatifs.','Marca los lotes cargados. Los palox son opcionales.'))}</p>
-      ${groups.map(c=>`${LB.multi?`<div class="small" style="font-weight:700;margin-top:4px">${esc(c.nom)}</div>`:''}<div class="pcl">${(c.lots||[]).filter(l=>!plFini(plLotOf(c,l.lot))||loadedL.some(y=>y.k===ppK(c.id,String(l.lot)))).map(l=>{ const k=ppK(c.id,String(l.lot)); const x=loadedL.find(y=>y.k===k); return `<label class="pcrow"><input type="checkbox" data-k="${esc(k)}"${x?' checked':''}><b>${esc(l.lot)}</b><span>${esc([l.variete,l.pg].filter(Boolean).join(' / '))}</span><input class="num" data-px="${esc(k)}" inputmode="decimal" placeholder="palox" value="${x&&x.px!=null?esc(fmtN(x.px)):''}"></label>`; }).join('')}</div>`).join('')}
-      <div class="row"><button class="primary" type="button" id="pc-ok">${esc(L('OK','OK'))}</button><button class="ghost" type="button" id="pc-x">${esc(L('Annuler','Cancelar'))}</button></div></div>`:'';
+  const AO=AL.filter(x=>!plFini(plE(x.k)));
+  const remForm=chForm?`<div class="card" style="gap:8px;background:var(--sunk)" id="pc-form"><b>${esc(L('Sur la remorque','En el remolque'))}</b><p class="hint" style="margin:0">${esc(L('Touche un lot pour le mettre ou l\'enlever. Les palox sont facultatifs.','Toca un lote para ponerlo o quitarlo. Los palox son opcionales.'))}</p>
+      ${groups.slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),undefined,{numeric:true})).map(c=>{ const ls=AO.filter(x=>x.c===c.id); if(!ls.length) return ''; return `${LB.multi?`<div class="small" style="font-weight:700;margin-top:4px">${esc(c.nom)}</div>`:''}<div class="pcl">${ls.map(a=>{ const x=loadedL.find(y=>y.k===a.k); return `<div class="pcrow2"><button type="button" class="pctog" data-k="${esc(a.k)}" aria-pressed="${!!x}"><span class="pcbox">${x?'✓':''}</span><b>${esc(a.lot)}</b><span>${esc([a.l.variete,a.l.pg].filter(Boolean).join(' / '))}</span></button>${x?`<input class="num" data-px="${esc(a.k)}" inputmode="decimal" placeholder="palox" value="${x.px!=null?esc(fmtN(x.px)):''}">`:''}</div>`; }).join('')}</div>`; }).join('')||`<p class="hint" style="margin:0">${esc(L('Tous les lots sont finis.','Todos los lotes están terminados.'))}</p>`}
+      <div class="row"><button class="primary" type="button" id="pc-x">${esc(L('Fermer','Cerrar'))}</button>${loadedL.length?`<button class="ghost" type="button" id="pc-clear">${esc(L('Vider la remorque','Vaciar el remolque'))}</button>`:''}</div></div>`:'';
   // 3) le passage
   let field;
   if(!cur) field=`<button class="primary big" type="button" id="pp-start">${esc(L('Commencer à planter','Empezar a plantar'))}</button>`;
   else { const isLast=cur.id===pass[pass.length-1].id; const sel=S.ppSel; const nSel=sel.filter(Boolean).length;
     const curK=[].concat(...(cur.b||[]).map(q=>(q||[]).map(x=>ppXK(x,cur))));
-    let lotBtns=loadedL.length?loadedL.map(x=>x.k):AL.filter(x=>!plFini(plE(x.k))).map(x=>x.k);
-    lotBtns=[...new Set(lotBtns.concat(curK))];
-    const others=AL.filter(x=>!lotBtns.includes(x.k));
+    let lotBtns=loadedL.length?loadedL.map(x=>x.k):AL.map(x=>x.k);
+    lotBtns=[...new Set(lotBtns.concat(curK))].filter(k=>!plFini(plE(k))).sort((a,b)=>AL.findIndex(x=>x.k===a)-AL.findIndex(x=>x.k===b));
+    const others=AL.filter(x=>!lotBtns.includes(x.k)&&!plFini(plE(x.k)));
     const target=nSel===3?L('les 3 buttes','los 3 camellones'):sel.map((v,i)=>v?ppButte(cur,i):null).filter(x=>x!=null).map(n=>L('butte ','camellón ')+n).join(L(' et ',' y '));
     field=`<div class="pphead"><b>${esc(L('Passage ','Pasada ')+cur.n)}</b><span>${ppAller(cur)?'↑':'↓'}</span>${!isLast?`<button class="linkbtn" type="button" id="pp-last">${esc(L('↩ revenir au dernier','↩ volver al último'))}</button>`:''}</div>
       <div class="ppbuttes">${[0,1,2].map(i=>{ const seq=(cur.b||[])[i]||[]; return `<button type="button" class="ppb" data-i="${i}" aria-pressed="${!!sel[i]}"><small>${esc(L('Butte ','Camellón ')+ppButte(cur,i))}</small><span>${seq.length?seq.map(x=>chip(ppXK(x,cur))).join('<i>→</i>'):'<em>?</em>'}</span></button>`; }).join('')}</div>
@@ -2643,11 +2652,16 @@ function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const y=window.s
   if($('pp-cancelnew')) $('pp-cancelnew').onclick=()=>{ S.ppNewParc=false; keep(); };
   if($('pc-open')) $('pc-open').onclick=()=>{ S.ppCharge=S.ppCharge===ch.id?null:ch.id; keep(); };
   if($('pc-x')) $('pc-x').onclick=()=>{ S.ppCharge=null; keep(); };
-  if($('pc-ok')) $('pc-ok').onclick=async()=>{ const D=S.ppDate; const ls=[]; $('pc-form').querySelectorAll('input[type=checkbox]').forEach(cb=>{ if(!cb.checked) return; const v=num($('pc-form').querySelector('input[data-px="'+cb.dataset.k+'"]').value); const {c,lot}=ppKs(cb.dataset.k); ls.push({lot, c, px:v}); });
+  const saveCharge=async ls=>{ const D=S.ppDate;
     const olds=ppChargeEnts(ch,D); const keepE=olds.find(e=>e.chauffeId===ch.id)||olds[0];
     const e=Object.assign({}, keepE||{id:'pc-'+uid(), type:'plcharge', chauffeId:ch.id, date:D, creeLe:nowIso()}, {lots:ls, auteurId:S.me.id, auteurNom:S.me.nom}); delete e.supprime;
     const rm=olds.filter(x=>x.id!==e.id).map(x=>Object.assign({},x,{supprime:true})); if(rm.length) await saveEntries(rm);
-    await ppSave(e); S.ppCharge=null; toast(L('Remorque enregistrée.','Remolque guardado.')); keep(); };
+    await ppSave(e); };
+  const curLoad=()=>ppChargeLots(ch,S.ppDate).map(x=>({lot:x.lot, c:x.c, px:x.px}));
+  document.querySelectorAll('#pc-form .pctog').forEach(b=>b.onclick=async()=>{ const {c,lot}=ppKs(b.dataset.k); let ls=curLoad(); const on=ls.some(x=>ppK(x.c,x.lot)===b.dataset.k);
+    ls=on?ls.filter(x=>ppK(x.c,x.lot)!==b.dataset.k):ls.concat([{lot,c,px:null}]); await saveCharge(ls); keep(); });
+  document.querySelectorAll('#pc-form input[data-px]').forEach(i=>i.onchange=async()=>{ const v=i.value.trim(); const n=v===''?null:num(v); if(v!==''&&(n==null||n<0)){ i.focus(); return; } const ls=curLoad().map(x=>ppK(x.c,x.lot)===i.dataset.px?Object.assign(x,{px:n}):x); await saveCharge(ls); });
+  if($('pc-clear')) $('pc-clear').onclick=async()=>{ await saveCharge([]); keep(); };
   const pb=$('pp-parcs'); if(pb) pb.querySelectorAll('button').forEach(b=>b.onclick=()=>{ if(b.dataset.v==='+new'){ S.ppNewParc=true; } else { S.ppParc=b.dataset.v; S.ppNewParc=false; S.ppCur=null; } keep(); });
   if($('pp-create')) $('pp-create').onclick=async()=>{ const nom=$('pp-nom').value.trim(); if(!nom){ $('pp-nom').focus(); return; } const c=curChauffe(); const list=(c.plparcs||[]).filter(x=>x.nom!==nom); list.push({nom, depart:S.ppNewDep==='droite'?L('droite','derecha'):L('gauche','izquierda')}); await saveChauffe(Object.assign({},c,{plparcs:list})); S.ppParc=nom; S.ppNewParc=false; S.ppCur=null; keep(); };
   if($('pp-start')) $('pp-start').onclick=async()=>{ const e={id:'pp-'+uid(), type:'plpass', chauffeId:ch.id, parc, n:1, date:S.ppDate, b:[[],[],[]], creeLe:nowIso(), auteurId:S.me.id, auteurNom:S.me.nom}; await ppSave(e); S.ppCur=e.id; S.ppSel=[true,true,true]; keep(); };
