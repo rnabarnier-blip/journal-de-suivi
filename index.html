@@ -440,6 +440,9 @@ button.big{min-height:60px;font-size:18px}
 .pcbox{flex:none;width:24px;height:24px;border-radius:6px;border:2px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:800;color:#fff}
 .pctog[aria-pressed="true"] .pcbox{background:var(--accent);border-color:var(--accent)}
 .pcrow2 input.num{width:84px;flex:none}
+.ppbhit{cursor:pointer}
+.ppbrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:15px}.ppbrow>span:first-child{min-width:44px}
+.ppbrow input.num{width:76px}.ppbrow .ppbm{min-height:40px;padding:4px 10px;font-size:14px}
 </style>
 </head>
 <body>
@@ -460,7 +463,7 @@ button.big{min-height:60px;font-size:18px}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.65.0';
+const APP_VERSION = '2.67.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1616,6 +1619,8 @@ function tabSuivi(ch, body){ S.suOpen=S.suOpen||{}; const PS=phaseSummaries(ch);
   body.querySelectorAll('.sufold').forEach(d=>{ const was=d.open; d.addEventListener('toggle',()=>{ S.suOpen[d.dataset.suf]=d.open; if(d.dataset.suf==='chauffe'&&d.open&&!was){ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); } }); });
   body.querySelectorAll('[data-sutab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.sutab; renderChauffe(); window.scrollTo({top:0}); });
   body.querySelectorAll('.ppside').forEach(b=>b.onclick=async()=>{ const y=window.scrollY; await ppSetSide(ch,b.dataset.parc,b.dataset.v); renderChauffe(); window.scrollTo({top:y}); });
+  try{ bindPlanEdit(ch, body); }catch(e){ console.error(e); }
+  body.querySelectorAll('[data-ppxlsx]').forEach(b=>b.onclick=()=>ppExportXlsx(ch,b.dataset.ppxlsx,body.querySelector('[data-ppxst="'+b.dataset.ppxlsx.replace(/"/g,'\\"')+'"]')));
   body.querySelectorAll('[data-ppprint]').forEach(b=>b.onclick=()=>go('planprint',{ppPrintParc:b.dataset.ppprint}));
   body.querySelectorAll('.pplg[data-hl]').forEach(b=>b.onclick=()=>{ const y=window.scrollY; S.ppHl=S.ppHl===b.dataset.hl?null:b.dataset.hl; renderChauffe(); window.scrollTo({top:y}); });
 }
@@ -2707,23 +2712,46 @@ function ppPat(id,i){ const P=[
   return `<pattern id="${id}" width="8" height="8" patternUnits="userSpaceOnUse">${P[i%P.length]}</pattern>`; }
 const ppPatIdx=(ch,k)=>{ const col=ppColors(ch); return Object.keys(col).indexOf(k); };
 function ppSwatch(ch,k){ const i=ppPatIdx(ch,k); return `<svg width="34" height="18" viewBox="0 0 34 18" style="flex:none"><defs>${ppPat('sw'+i,i)}</defs><rect x=".5" y=".5" width="33" height="17" rx="3" fill="url(#sw${i})" stroke="#000"/></svg>`; }
+/* ===== Longueurs réelles : longueur de chaque butte (m) + position de chaque étiquette =====
+   Réglages de parcelle dans plparcs : {nom, depart, lenDef (m), len:{numéro de butte: m}}.
+   Position d'une étiquette = x.f (0–1 depuis le début de la butte, dans le sens de plantation).
+   Sans réglage : estimée d'après l'heure des appuis (si noté au fur et à mesure), sinon parts égales. */
+function ppParcCfg(ch,parc){ for(const c of ppGroup(ch)){ const x=(c.plparcs||[]).find(y=>y.nom===parc); if(x) return {c,x}; } return {c:ch, x:null}; }
+async function ppSetParcCfg(ch,parc,patch){ const {c,x}=ppParcCfg(ch,parc); const cur=liveChauffes().find(y=>y.id===c.id)||c;
+  const l=(cur.plparcs||[]).filter(y=>y.nom!==parc); const nx=Object.assign({nom:parc, depart:ppDepart(ch,parc)}, x||{}, patch); l.push(nx); await saveChauffe(Object.assign({},cur,{plparcs:l})); }
+const ppLenDef=(ch,parc)=>{ const x=ppParcCfg(ch,parc).x; return x&&x.lenDef>0?Number(x.lenDef):null; };
+const ppLenOwn=(ch,parc,b)=>{ const x=ppParcCfg(ch,parc).x; const v=x&&x.len&&x.len[b]; return v>0?Number(v):null; };
+const ppLen=(ch,parc,b)=>ppLenOwn(ch,parc,b)||ppLenDef(ch,parc);
+const ppTs=e=>[].concat(...(e.b||[]).map(q=>(q||[]).map(x=>Date.parse(x.t)).filter(v=>!isNaN(v))));
+/* Débuts de chaque lot sur la butte (fractions croissantes, la 1re = 0) */
+function ppFr(pass,e,i){ const seq=((e.b||[])[i]||[]); const n=seq.length; if(n<=1) return [0];
+  const ts=ppTs(e); const t0=ts.length?Math.min(...ts):NaN; const nx=pass.find(p=>p.n===e.n+1);
+  let t1=nx?Math.min(...ppTs(nx).concat([Date.parse(nx.creeLe)||Infinity])):Math.min(Date.now(), (ts.length?Math.max(...ts):NaN)+30*60000);
+  const timeOk=isFinite(t0)&&isFinite(t1)&&t1-t0>=180000&&t1-t0<=5*3600000;
+  const f=[0]; for(let k=1;k<n;k++){ const x=seq[k]; let v=x.f!=null?Number(x.f):(timeOk?(Date.parse(x.t)-t0)/(t1-t0):null);
+    if(v==null||isNaN(v)||(!timeOk&&x.f==null)) v=k/n; f.push(v); }
+  for(let k=1;k<n;k++){ f[k]=Math.max(f[k], f[k-1]+0.01); } for(let k=n-1;k>=1;k--){ f[k]=Math.min(f[k], (k===n-1?0.99:f[k+1]-0.01)); }
+  return f; }
 const ppRight=(ch,parc)=>/droit|derech|right/i.test(ppDepart(ch,parc));
 /* opt : {fit:true → largeur 100 % (impression), labels:false → pas de numéros dans les buttes, nums:false → pas de numéros de buttes} */
 function ppPlanSVG(ch, parc, hl, opt){ opt=opt||{}; const pass=ppPass(ch,parc); if(!pass.length) return ''; const LB=ppLab(ch); const col=ppColors(ch); const R=ppRight(ch,parc);
-  const N=Math.max(...pass.map(e=>ppButte(e,2))); const bw=N>40?18:N>20?22:28, gap=N>40?4:6, X0=8, T=30, H=opt.fit?Math.max(200,Math.min(420,(N*(bw+gap))*0.45)):260, B=opt.nums===false?8:26;
+  const N=Math.max(...pass.map(e=>ppButte(e,2))); const bw=N>40?18:N>20?22:28, gap=N>40?3:4, X0=8, T=30, H=opt.fit?Math.max(200,Math.min(420,(N*(bw+gap))*0.45)):300, B=opt.nums===false?8:26;
+  const lens=[]; for(let b=1;b<=N;b++) lens[b]=ppLen(ch,parc,b); const Lmax=Math.max(0,...lens.filter(Boolean)); const hB=b=>Lmax&&lens[b]?Math.max(24,H*lens[b]/Lmax):H; const sel=opt.hit&&S.ppBut;
   const W=X0*2+N*bw+(N-1)*gap; const x=b=>X0+(R?(N-b):(b-1))*(bw+gap);
   let g='';
   pass.forEach(e=>{ const up=ppAller(e); const xa=Math.min(x(ppButte(e,0)),x(ppButte(e,2)));
     g+=`<text x="${xa+(3*bw+2*gap)/2}" y="12" text-anchor="middle" class="pps">${'P'+e.n+' '+(up?'↑':'↓')}</text>`;
-    [0,1,2].forEach(i=>{ const b=ppButte(e,i), X=x(b), seq=((e.b||[])[i]||[]);
-      if(!seq.length){ g+=`<rect x="${X}" y="${T}" width="${bw}" height="${H}" rx="4" fill="none" stroke="#9a948a" stroke-dasharray="4 3"/>`; }
-      else { const n=seq.length, GP=n>1?10:0, h=(H-GP*(n-1))/n;
-        seq.forEach((xx,k)=>{ const key=ppXK(xx,e); const pos=up?n-1-k:k; const Y=T+pos*(h+GP); const dim=hl&&hl!==key;
+    [0,1,2].forEach(i=>{ const b=ppButte(e,i), X=x(b), seq=((e.b||[])[i]||[]); const Hb=hB(b), Tb=T+H-Hb;
+      if(!seq.length){ g+=`<rect x="${X}" y="${Tb}" width="${bw}" height="${Hb}" rx="2" fill="none" stroke="#9a948a" stroke-dasharray="4 3"/>`; }
+      else { const n=seq.length, GP=n>1?6:0, fr=ppFr(pass,e,i).concat([1]);
+        const seg=k=>{ const a=fr[k], z=fr[k+1]; let y0=up?Tb+Hb*(1-z):Tb+Hb*a, y1=up?Tb+Hb*(1-a):Tb+Hb*z; if(k<n-1){ if(up) y0+=GP/2; else y1-=GP/2; } if(k>0){ if(up) y1-=GP/2; else y0+=GP/2; } if(y1-y0<3){ const m=(y0+y1)/2; y0=m-1.5; y1=m+1.5; } return [y0,y1]; };
+        seq.forEach((xx,k)=>{ const key=ppXK(xx,e); const [Y,Y1]=seg(k); const h=Y1-Y; const dim=hl&&hl!==key;
           const fill=opt.bw?`url(#pp-pat${ppPatIdx(ch,key)})`:(col[key]||'#4a4278');
-          g+=`<rect x="${X}" y="${Y}" width="${bw}" height="${h}" rx="3" fill="${fill}" stroke="${opt.bw?'#000':'rgba(0,0,0,.25)'}"${opt.bw?' stroke-width="1.2"':''}${dim?' opacity=".18"':''}/>`;
+          g+=`<rect x="${X}" y="${Y}" width="${bw}" height="${h}" rx="1.5" fill="${fill}" stroke="${opt.bw?'#000':'rgba(0,0,0,.25)'}"${opt.bw?' stroke-width="1.2"':''}${dim?' opacity=".18"':''}/>`;
           const lab=LB.chip(key); if(opt.labels!==false&&h>=lab.length*7.5+12){ if(opt.bw) g+=`<rect x="${X+bw/2-8}" y="${Y+h/2-(lab.length*7+6)/2}" width="16" height="${lab.length*7+6}" rx="3" fill="#fff" stroke="#000" stroke-width=".8"/>`;
             g+=`<text transform="translate(${X+bw/2},${Y+h/2}) rotate(-90)" text-anchor="middle" dominant-baseline="central" class="ppsl"${opt.bw?' style="fill:#000"':''}${dim?' opacity=".3"':''}>${esc(lab)}</text>`; } });
-        for(let k=1;k<n;k++){ const Y=T+k*(h+GP)-GP/2; g+=`<line x1="${X-4}" x2="${X+bw+4}" y1="${Y}" y2="${Y}" stroke="#111" stroke-width="2.2"/>`; } }
+        for(let k=1;k<n;k++){ const Y=up?Tb+Hb*(1-fr[k]):Tb+Hb*fr[k]; g+=`<line x1="${X-3}" x2="${X+bw+3}" y1="${Y}" y2="${Y}" stroke="#111" stroke-width="2.2"/>`; } }
+      if(opt.hit){ const on=sel&&sel.id===e.id&&sel.i===i; if(on) g+=`<rect x="${X-2.5}" y="${Tb-2.5}" width="${bw+5}" height="${Hb+5}" rx="3" fill="none" stroke="var(--accent)" stroke-width="3"/>`; g+=`<rect class="ppbhit" data-pid="${esc(e.id)}" data-pi="${i}" x="${X-gap/2}" y="${T-4}" width="${bw+gap}" height="${H+8}" fill="transparent"/>`; }
       if(opt.nums!==false&&(N<=40||b%5===0||b===1)) g+=`<text x="${X+bw/2}" y="${T+H+16}" text-anchor="middle" class="pps">${b}</text>`; }); });
   const size=opt.fit?`width="100%" style="max-height:165mm;print-color-adjust:exact;-webkit-print-color-adjust:exact"`:`width="${W}" height="${T+H+B}" style="print-color-adjust:exact;-webkit-print-color-adjust:exact"`;
   const defs=opt.bw?'<defs>'+Object.keys(col).map((k,i)=>ppPat('pp-pat'+i,i)).join('')+'</defs>':'';
@@ -2731,15 +2759,114 @@ function ppPlanSVG(ch, parc, hl, opt){ opt=opt||{}; const pass=ppPass(ch,parc); 
 function ppPlanCardHTML(ch, print){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch,pc).length); if(!parcs.length) return ''; const LB=ppLab(ch); const col=ppColors(ch); const W=ppWhere(ch);
   return parcs.map(pc=>{ const ks=Object.keys(W).filter(k=>W[k].some(x=>x.parc===pc)).sort(ppSortK); const hl=print?null:(S.ppHl&&ks.includes(S.ppHl)?S.ppHl:null);
     const legend=ks.map(k=>{ const pe=(()=>{ const {c,lot}=ppKs(k); return plLotOf({id:c},lot); })(); return `<${print?'div':'button type="button"'} class="pplg${hl===k?' on':''}" data-hl="${esc(k)}"><span class="pplot" style="background:${col[k]}">${esc(LB.chip(k))}</span><span>${esc([LB.info(k), ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,'')].filter(Boolean).join(' — '))}${pe&&plFini(pe)?' ✓':''}</span></${print?'div':'button'}>`; }).join('');
-    const svg=ppPlanSVG(ch,pc,hl,{});
-    return print?`<p class="small" style="margin:10px 0 4px"><b>${esc(L('Plan : ','Plano: ')+pc)}</b> · ${esc(L('départ côté ','inicio lado ')+ppDepart(ch,pc)+(ppRight(ch,pc)?L(' (à droite du plan)',' (a la derecha del plano)'):L(' (à gauche du plan)',' (a la izquierda del plano)'))+L(", pas à l'échelle",', no a escala'))}</p><div style="overflow:hidden">${ppPlanSVG(ch,pc,null,{fit:true})}</div><div class="pplgs">${legend}</div>`
+    const svg=ppPlanSVG(ch,pc,hl,{hit:true});
+    return print?`<p class="small" style="margin:10px 0 4px"><b>${esc(L('Plan : ','Plano: ')+pc)}</b> · ${esc(L('départ côté ','inicio lado ')+ppDepart(ch,pc)+(ppRight(ch,pc)?L(' (à droite du plan)',' (a la derecha del plano)'):L(' (à gauche du plan)',' (a la izquierda del plano)')))}</p><div style="overflow:hidden">${ppPlanSVG(ch,pc,null,{fit:true})}</div><div class="pplgs">${legend}</div>`
     :`<div class="card" style="gap:10px"><div class="hhead"><h3 class="ctitle" style="margin:0">🗺️ ${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h3></div>
-      <p class="note" style="margin:0">${esc(L('Pas à l\'échelle. Buttes numérotées depuis le côté de départ. ','No a escala. Camellones numerados desde el lado de inicio. ')+L('Trait noir = étiquette (changement de lot). Touche un lot pour le surligner.','Raya negra = etiqueta (cambio de lote). Toca un lote para resaltarlo.'))}</p>
+      <p class="note" style="margin:0">${esc(L('Buttes numérotées depuis le côté de départ. Longueurs à peu près réelles quand elles sont indiquées. ','Camellones numerados desde el lado de inicio. Largos casi reales cuando están indicados. ')+L('Trait noir = étiquette (changement de lot). Touche un lot pour le surligner.','Raya negra = etiqueta (cambio de lote). Toca un lote para resaltarlo.'))}</p>
       <div class="row" style="align-items:center;gap:8px"><span class="small">${esc(L('Départ :','Inicio:'))}</span><div class="seg"><button type="button" class="ppside" data-parc="${esc(pc)}" data-v="gauche" aria-pressed="${!ppRight(ch,pc)}">${esc(L('← de gauche','← desde la izquierda'))}</button><button type="button" class="ppside" data-parc="${esc(pc)}" data-v="droite" aria-pressed="${ppRight(ch,pc)}">${esc(L('de droite →','desde la derecha →'))}</button></div></div>
-      <div class="ppplanw">${svg}</div><div class="pplgs">${legend}</div>
-      <button class="ghost" type="button" data-ppprint="${esc(pc)}">🖨️ ${esc(L('Imprimer le plan','Imprimir el plano'))}</button></div>`; }).join(''); }
+      <div class="row" style="align-items:center;gap:8px"><label class="small" for="pplen-${esc(pc)}">${esc(L('Longueur habituelle des buttes','Largo habitual de los camellones'))}</label><input class="num pplendef" id="pplen-${esc(pc)}" data-parc="${esc(pc)}" inputmode="numeric" style="width:90px" placeholder="m" value="${ppLenDef(ch,pc)||''}"><span class="small">m</span></div>
+      <p class="hint" style="margin:0">${esc(L('Touche une butte sur le plan pour régler sa longueur et la place des étiquettes.','Toca un camellón en el plano para ajustar su largo y el lugar de las etiquetas.'))}</p>
+      <div class="ppplanw">${svg}</div>${ppButPanel(ch,pc)}<div class="pplgs">${legend}</div>
+      <div class="row"><button class="ghost" type="button" data-ppprint="${esc(pc)}">🖨️ ${esc(L('Imprimer le plan','Imprimir el plano'))}</button><button class="ghost" type="button" data-ppxlsx="${esc(pc)}">📊 ${esc(L('Fichier Excel','Archivo Excel'))}</button></div><div class="status" data-ppxst="${esc(pc)}"></div></div>`; }).join(''); }
+/* Panneau d'une butte : sa longueur et la longueur de chaque lot (en mètres) */
+function ppButPanel(ch,pc){ const sb=S.ppBut; if(!sb) return ''; const pass=ppPass(ch,pc); const e=pass.find(p=>p.id===sb.id); if(!e) return '';
+  const i=sb.i, b=ppButte(e,i), seq=((e.b||[])[i]||[]), n=seq.length; const LB=ppLab(ch); const col=ppColors(ch);
+  const own=ppLenOwn(ch,pc,b), Ld=ppLenDef(ch,pc), Lb=own||Ld||200; const fr=ppFr(pass,e,i).concat([1]);
+  const m=k=>Math.round((fr[k+1]-fr[k])*Lb);
+  const manual=seq.slice(1).some(x=>x.f!=null);
+  return `<div class="card ppbpanel" id="pp-bpanel" style="gap:8px;background:var(--sunk)">
+    <div class="hhead"><b>${esc(L('Butte ','Camellón ')+b)} · ${esc(L('passage ','pasada ')+e.n)} ${ppAller(e)?'↑':'↓'}</b><button class="linkbtn" type="button" id="ppb-x">${esc(L('Fermer','Cerrar'))}</button></div>
+    <div class="ppbrow"><span>${esc(L('Longueur de la butte','Largo del camellón'))}</span><input class="num" id="ppb-len" inputmode="numeric" placeholder="${Ld?Ld:'m'}" value="${own||''}"><span>m</span></div>
+    ${!own&&!Ld?`<p class="hint" style="margin:0">${esc(L('Longueur pas encore indiquée : on compte 200 m pour placer les lots.','Largo aún no indicado: se cuentan 200 m para ubicar los lotes.'))}</p>`:''}
+    ${n?`<span class="small" style="font-weight:700">${esc(L('Lots dans le sens de plantation','Lotes en el sentido de plantación'))} ${ppAller(e)?'(↑ '+L('depuis le bas','desde abajo')+')':'(↓ '+L('depuis le haut','desde arriba')+')'}</span>
+    ${seq.map((x,k)=>{ const key=ppXK(x,e); return `<div class="ppbrow"><span><span class="pplot" style="background:${col[key]}">${esc(LB.chip(key))}</span></span>${k<n-1?`<button type="button" class="ghost ppbm" data-k="${k}" data-d="-10">−10</button><input class="num ppbseg" data-k="${k}" inputmode="numeric" value="${m(k)}"><button type="button" class="ghost ppbm" data-k="${k}" data-d="10">+10</button><span>m</span>`:`<span class="small">${esc(n>1?L('le reste : ','el resto: ')+m(k)+' m':m(k)+' m')}</span>`}</div>`; }).join('')}`:''}
+    ${n>1&&manual?`<button class="linkbtn" type="button" id="ppb-auto">${esc(L('Remettre la position automatique','Volver a la posición automática'))}</button>`:''}</div>`; }
+function bindPlanEdit(ch, root){ const y0=()=>window.scrollY; const again=()=>{ const y=y0(); renderChauffe(); window.scrollTo({top:y}); };
+  root.querySelectorAll('.ppbhit').forEach(r=>r.addEventListener('click',()=>{ S.ppBut={id:r.dataset.pid, i:Number(r.dataset.pi)}; again(); }));
+  root.querySelectorAll('.pplendef').forEach(inp=>inp.onchange=async()=>{ const v=num(inp.value); await ppSetParcCfg(ch,inp.dataset.parc,{lenDef:v>0?v:null}); again(); });
+  const pn=$('pp-bpanel'); if(!pn||!S.ppBut) return;
+  const e0=ppAllPass(ch).find(p=>p.id===S.ppBut.id); if(!e0) return; const pc=e0.parc, i=S.ppBut.i, b=ppButte(e0,i);
+  $('ppb-x').onclick=()=>{ S.ppBut=null; again(); };
+  $('ppb-len').onchange=async()=>{ const v=num($('ppb-len').value); const {x}=ppParcCfg(ch,pc); const len=Object.assign({}, x&&x.len||{}); if(v>0) len[b]=v; else delete len[b]; await ppSetParcCfg(ch,pc,{len}); again(); };
+  const saveSegs=async ms=>{ const pass=ppPass(ch,pc); const e=JSON.parse(JSON.stringify(pass.find(p=>p.id===e0.id))); const seq=e.b[i]; const Lb=ppLen(ch,pc,b)||200; let acc=0;
+    for(let k=0;k<seq.length-1;k++){ acc+=Math.max(0,ms[k]); seq[k+1].f=Math.min(0.99,Math.max(0.01,acc/Lb)); }
+    await saveEntry(e); again(); };
+  const curMs=()=>[...pn.querySelectorAll('.ppbseg')].map(inp=>Math.max(0,num(inp.value)||0));
+  pn.querySelectorAll('.ppbseg').forEach(inp=>inp.onchange=()=>saveSegs(curMs()));
+  pn.querySelectorAll('.ppbm').forEach(bt=>bt.onclick=()=>{ const ms=curMs(); const k=Number(bt.dataset.k); ms[k]=Math.max(1,ms[k]+Number(bt.dataset.d)); saveSegs(ms); });
+  if($('ppb-auto')) $('ppb-auto').onclick=async()=>{ const e=JSON.parse(JSON.stringify(ppPass(ch,pc).find(p=>p.id===e0.id))); (e.b[i]||[]).forEach(x=>{ delete x.f; }); await saveEntry(e); again(); }; }
+/* ===== Export Excel du plan (.xlsx fait maison : zip sans compression) =====
+   Feuille « Plan » : une colonne par butte (dans le sens du plan), une ligne par tranche de mètres,
+   cellules colorées par lot, numéro du lot au début et à la fin de chaque morceau (comme les plans de Gérard).
+   Feuille « Lots » : couleur, lot, saison, variété, porte-greffe, où il est. */
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(files){ const enc=new TextEncoder(); const parts=[], cent=[]; let off=0;
+  const u16=v=>[v&255,(v>>>8)&255], u32=v=>[v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];
+  files.forEach(f=>{ const name=enc.encode(f.name), data=typeof f.data==='string'?enc.encode(f.data):f.data, crc=crc32(data);
+    const loc=new Uint8Array([0x50,0x4b,3,4, ...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21), ...u32(crc),...u32(data.length),...u32(data.length), ...u16(name.length),...u16(0)]);
+    parts.push(loc,name,data);
+    cent.push(new Uint8Array([0x50,0x4b,1,2, ...u16(20),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21), ...u32(crc),...u32(data.length),...u32(data.length), ...u16(name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),name);
+    off+=loc.length+name.length+data.length; });
+  const csz=cent.reduce((a,x)=>a+x.length,0);
+  const end=new Uint8Array([0x50,0x4b,5,6, ...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(csz),...u32(off),...u16(0)]);
+  return new Blob([...parts,...cent,end],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); }
+const xEsc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const xCol=n=>{ let s=''; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
+function ppPlanXlsx(ch, parc){ const pass=ppPass(ch,parc); if(!pass.length) return null; const LB=ppLab(ch); const col=ppColors(ch); const R=ppRight(ch,parc);
+  const W=ppWhere(ch); const keys=Object.keys(W).filter(k=>W[k].some(x=>x.parc===parc)).sort(ppSortK); const kIdx={}; keys.forEach((k,i)=>kIdx[k]=i);
+  const N=Math.max(...pass.map(e=>ppButte(e,2))); const lens=[]; for(let b=1;b<=N;b++) lens[b]=ppLen(ch,parc,b); const known=lens.filter(Boolean); const Lmax=known.length?Math.max(...known):0;
+  const STEP=Lmax?(Lmax>150?5:Lmax>60?2:1):5, ROWS=Lmax?Math.ceil(Lmax/STEP):40;  // sans longueurs : 40 lignes = 100 %
+  // grille[ligne][butte] = {k, lab}
+  const grid=Array.from({length:ROWS},()=>Array(N+1).fill(null)); const bInfo={};
+  pass.forEach(e=>{ const up=ppAller(e); [0,1,2].forEach(i=>{ const b=ppButte(e,i), seq=((e.b||[])[i]||[]); if(!seq.length) return; const fr=ppFr(pass,e,i).concat([1]);
+    const rowsB=Lmax&&lens[b]?Math.max(1,Math.round(lens[b]/STEP)):ROWS; const base=ROWS-rowsB; // aligné en bas
+    seq.forEach((x,k)=>{ const key=ppXK(x,e); let a=Math.round(fr[k]*rowsB), z=Math.round(fr[k+1]*rowsB); if(z<=a) z=a+1; if(z>rowsB) z=rowsB; if(a>=rowsB) a=rowsB-1;
+      for(let r=a;r<z;r++){ const row=up?base+rowsB-1-r:base+r; if(row>=0&&row<ROWS) grid[row][b]={k:key}; }
+      const r1=up?base+rowsB-1-a:base+a, r2=up?base+rowsB-1-(z-1):base+(z-1); [r1,r2].forEach(rr=>{ if(grid[rr]&&grid[rr][b]) grid[rr][b].lab=LB.chip(key); }); }); }); });
+  // styles : 0 normal, 1 titre, 2 entête, 3 numéro de butte, 4.. un par lot
+  const argb=h=>'FF'+String(h||'#888888').replace('#','').toUpperCase();
+  const light=h=>{ const v=parseInt(String(h).slice(1),16); const r=v>>16,g=(v>>8)&255,b=v&255; return (r*299+g*587+b*114)/1000>150; };
+  const fills=keys.map(k=>`<fill><patternFill patternType="solid"><fgColor rgb="${argb(col[k])}"/><bgColor indexed="64"/></patternFill></fill>`).join('');
+  const xfs=keys.map((k,i)=>`<xf numFmtId="0" fontId="${light(col[k])?3:2}" fillId="${2+i}" borderId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>`).join('');
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="4"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><b/><sz val="8"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><b/><sz val="8"/><color rgb="FF000000"/><name val="Arial"/></font></fonts>
+<fills count="${2+keys.length}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${fills}</fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="hair"><color rgb="FFD0CCC4"/></left><right style="hair"><color rgb="FFD0CCC4"/></right><top style="hair"><color rgb="FFD0CCC4"/></top><bottom style="hair"><color rgb="FFD0CCC4"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="${4+keys.length+1}"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/><xf numFmtId="0" fontId="3" fillId="0" borderId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"/>${xfs}<xf numFmtId="0" fontId="0" fillId="0" borderId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const sk=k=>4+kIdx[k]; const WRAP=4+keys.length;
+  const cell=(c,r,v,st)=>{ const ref=xCol(c)+r; if(v==null||v==='') return `<c r="${ref}" s="${st||0}"/>`; return typeof v==='number'?`<c r="${ref}" s="${st||0}"><v>${v}</v></c>`:`<c r="${ref}" s="${st||0}" t="inlineStr"><is><t>${xEsc(v)}</t></is></c>`; };
+  const colOf=b=>R?(N-b)+1:b;  // colonne A = mètres
+  const rows=[];
+  rows.push(`<row r="1">${cell(0,1,L('Plan de plantation – ','Plano de plantación – ')+parc,1)}</row>`);
+  rows.push(`<row r="2">${cell(0,2,ppGroup(ch).map(c=>c.nom).join(', ')+' · '+L('départ ','inicio ')+(R?L('à droite','a la derecha'):L('à gauche','a la izquierda'))+' · '+(Lmax?L('1 ligne = ','1 fila = ')+STEP+' m':L('longueurs non indiquées : 1 ligne = 2,5 % de la butte','largos no indicados: 1 fila = 2,5 % del camellón'))+' · '+isoFr(todayIso()))}</row>`);
+  // ligne 3 : passages
+  let r3=`<row r="3">${cell(0,3,L('Passage','Pasada'),2)}`; const pRow=[]; pass.forEach(e=>{ const b=ppButte(e,R?2:0); pRow.push([colOf(b),'P'+e.n+(ppAller(e)?' ↑':' ↓')]); }); pRow.sort((a,b)=>a[0]-b[0]).forEach(([c,v])=>{ r3+=cell(c,3,v,2); }); rows.push(r3+'</row>');
+  for(let r=0;r<ROWS;r++){ const rr=4+r; let x=`<row r="${rr}" ht="11" customHeight="1">${cell(0,rr,Lmax?(ROWS-r)*STEP:'',2)}`;
+    const cs=[]; for(let b=1;b<=N;b++){ const g=grid[r][b]; cs.push([colOf(b), g?cell(colOf(b),rr,g.lab||'',sk(g.k)):cell(colOf(b),rr,'',3)]); }
+    cs.sort((a,b)=>a[0]-b[0]).forEach(c=>x+=c[1]); rows.push(x+'</row>'); }
+  const rn=4+ROWS; let xb=`<row r="${rn}">${cell(0,rn,L('Butte','Camellón'),2)}`; const bs=[]; for(let b=1;b<=N;b++) bs.push([colOf(b),cell(colOf(b),rn,b,2)]); bs.sort((a,b)=>a[0]-b[0]).forEach(c=>xb+=c[1]); rows.push(xb+'</row>');
+  const rl=rn+1; let xl=`<row r="${rl}">${cell(0,rl,L('Longueur (m)','Largo (m)'),2)}`; const ls=[]; for(let b=1;b<=N;b++) if(lens[b]) ls.push([colOf(b),cell(colOf(b),rl,lens[b],2)]); ls.sort((a,b)=>a[0]-b[0]).forEach(c=>xl+=c[1]); rows.push(xl+'</row>');
+  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" zoomScale="90"><pane xSplit="1" ySplit="3" topLeftCell="B4" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="12"/><cols><col min="1" max="1" width="9" customWidth="1"/><col min="2" max="${N+1}" width="3.6" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  // feuille Lots
+  const lr=[`<row r="1">${cell(0,1,L('Couleur','Color'),2)}${cell(1,1,L('Lot','Lote'),2)}${cell(2,1,L('Saison','Temporada'),2)}${cell(3,1,L('Variété','Variedad'),2)}${cell(4,1,L('Porte-greffe','Portainjerto'),2)}${cell(5,1,L('Où','Dónde'),2)}${cell(6,1,L('Fini','Terminado'),2)}</row>`];
+  keys.forEach((k,i)=>{ const r=i+2; const {c,lot}=ppKs(k); const l=LB.l(k); const pe=plLotOf({id:c},lot);
+    lr.push(`<row r="${r}">${cell(0,r,LB.chip(k),sk(k))}${cell(1,r,lot)}${cell(2,r,ppSai(c))}${cell(3,r,l.variete||'')}${cell(4,r,l.pg||'')}${cell(5,r,ppWhereTxt(W[k].filter(x=>x.parc===parc)).replace(/^[^:]*: /,''),WRAP)}${cell(6,r,pe&&plFini(pe)?L('oui','sí'):'')}</row>`); });
+  const sheet2=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="9" customWidth="1"/><col min="2" max="2" width="8" customWidth="1"/><col min="3" max="3" width="16" customWidth="1"/><col min="4" max="5" width="16" customWidth="1"/><col min="6" max="6" width="60" customWidth="1"/><col min="7" max="7" width="8" customWidth="1"/></cols><sheetData>${lr.join('')}</sheetData></worksheet>`;
+  const files=[
+    {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
+    {name:'_rels/.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xEsc(L('Plan','Plano'))}" sheetId="1" r:id="rId1"/><sheet name="${xEsc(L('Lots','Lotes'))}" sheetId="2" r:id="rId2"/></sheets></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml', data:styles},
+    {name:'xl/worksheets/sheet1.xml', data:sheet1},
+    {name:'xl/worksheets/sheet2.xml', data:sheet2}];
+  return zipStore(files); }
+async function ppExportXlsx(ch, parc, st){ try{ const blob=ppPlanXlsx(ch,parc); if(!blob) return; shareFile(new File([blob], slug(L('plan-','plano-')+parc)+'.xlsx', {type:blob.type}), st, L('Fichier Excel prêt : il s\'ouvre dans Excel ou Numbers.','Archivo Excel listo: se abre en Excel o Numbers.')); }catch(e){ console.error(e); if(st){ st.textContent=L('Export impossible : ','Exportación imposible: ')+e.message; st.className='status err'; } } }
 /* Changer le côté de départ d'une parcelle (commun à toutes les saisons du groupe) */
-async function ppSetSide(ch, parc, v){ const dep=v==='droite'?L('droite','derecha'):L('gauche','izquierda'); const grp=ppGroup(ch); let done=false;
+async function ppSetSide(ch, parc, v){ const dep=v==='droite'?L('droite','derecha'):L('gauche','izquierda'); return ppSetParcCfg(ch,parc,{depart:dep}); const grp=ppGroup(ch); let done=false;
   for(const c of grp){ const l=(c.plparcs||[]); if(l.some(x=>x.nom===parc)){ await saveChauffe(Object.assign({},c,{plparcs:l.map(x=>x.nom===parc?Object.assign({},x,{depart:dep}):x)})); done=true; } }
   if(!done){ await saveChauffe(Object.assign({},ch,{plparcs:(ch.plparcs||[]).concat([{nom:parc, depart:dep}])})); } }
 /* Page d'impression du plan : plan + légende, écritures au choix */
@@ -2752,14 +2879,15 @@ function renderPlanPrint(){ const ch=curChauffe(); const pc=S.ppPrintParc; if(!c
   <section class="panel">
     <div class="card noprint" style="gap:10px"><span class="lab">${esc(L('Ce qui est écrit sur la feuille','Lo que se escribe en la hoja'))}</span>
       <div class="ppopts">${opts.map(([k,t])=>`<label class="pcrow" style="grid-template-columns:auto 1fr"><input type="checkbox" data-po="${k}"${o[k]?' checked':''}><span style="color:var(--fg);font-size:15px">${esc(t)}</span></label>`).join('')}</div>
-      <div class="row"><button class="primary" type="button" id="r-print">${esc(L('Imprimer / PDF','Imprimir / PDF'))}</button><button class="ghost" type="button" id="r-file">${esc(L('Envoyer le fichier','Enviar el archivo'))}</button></div>
+      <div class="row"><button class="primary" type="button" id="r-print">${esc(L('Imprimer / PDF','Imprimir / PDF'))}</button><button class="ghost" type="button" id="r-file">${esc(L('Envoyer le fichier','Enviar el archivo'))}</button><button class="ghost" type="button" id="r-xlsx">📊 ${esc(L('Fichier Excel','Archivo Excel'))}</button></div>
       <p class="note">${esc(L("La feuille s'imprime en paysage. Sur iPad : « Imprimer / PDF », puis Partager (⬆︎) pour garder le PDF.","La hoja se imprime en horizontal. En iPad: « Imprimir / PDF », luego Compartir (⬆︎) para guardar el PDF."))}</p><div class="status" id="r-st"></div></div>
     <article class="paper ppsheet" id="reg">
-      ${o.title?`<h2 style="margin:0 0 2px;font-size:20px">${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h2><p class="small" style="margin:0 0 8px">${esc(ppGroup(ch).map(c=>c.nom).join(', ')+' · '+L('départ ','inicio ')+(ppRight(ch,pc)?L('à droite','a la derecha'):L('à gauche','a la izquierda'))+' · '+L('pas à l\'échelle','no a escala')+' · '+isoFr(todayIso()))}</p>`:''}
+      ${o.title?`<h2 style="margin:0 0 2px;font-size:20px">${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h2><p class="small" style="margin:0 0 8px">${esc(ppGroup(ch).map(c=>c.nom).join(', ')+' · '+L('départ ','inicio ')+(ppRight(ch,pc)?L('à droite','a la derecha'):L('à gauche','a la izquierda'))+' · '+isoFr(todayIso()))}</p>`:''}
       ${ppPlanSVG(ch,pc,null,{fit:true, bw:o.bw, labels:o.labels, nums:o.nums})}
       <div class="pplgsp">${legend}</div>
     </article></section>`;
   $('r-back').onclick=()=>go('chauffe',{tab:'hist'});
+  $('r-xlsx').onclick=()=>ppExportXlsx(ch,pc,$('r-st'));
   document.querySelectorAll('[data-po]').forEach(cb=>cb.onchange=()=>{ S.ppPO[cb.dataset.po]=cb.checked; renderPlanPrint(); });
   $('r-print').onclick=()=>{ try{ window.print(); }catch(e){ $('r-st').textContent=L("L'impression n'est pas disponible ici : utilise « Envoyer le fichier ».","La impresión no está disponible aquí: usa « Enviar el archivo »."); $('r-st').className='status err'; } };
   $('r-file').onclick=()=>{ const css=[...document.querySelectorAll('style')].map(x=>x.textContent).join('\n'); const doc=`<!doctype html><html lang="${S.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(L('Plan','Plano')+' — '+pc)}</title><style>${css}body{margin:0;padding:12px;background:#fff}.paper{border:0;padding:0}@page{size:landscape;margin:8mm}</style></head><body>${$('reg').outerHTML}</body></html>`;
