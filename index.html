@@ -507,6 +507,9 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .apval{flex:none;font-weight:800;font-size:15px;text-align:right;max-width:38%}
 .apgo{flex:none;font-size:22px;color:var(--muted)}
 .aptodo{text-align:left;font-weight:600}
+.seasonw{display:grid;gap:2px}.seasonedit{justify-self:end;font-size:13.5px;margin-right:6px}
+.seasoncard .meta span{white-space:normal}
+.looserow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}.looserow select{max-width:60%}
 </style>
 </head>
 <body>
@@ -527,7 +530,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.71.0';
+const APP_VERSION = '2.72.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1253,7 +1256,7 @@ const dIsoAdd=(iso,n)=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate(
 const dDayIdx=(deb,iso)=>Math.round((new Date(iso+'T12:00:00')-new Date(deb+'T12:00:00'))/864e5)+1;
 function dosLotBox(grp,c,l,inner,on,dis){ const multi=grp.length>1; return `<button type="button" class="dbox${on?' on':''}${dis?' dis':''}" data-k="${esc(c.id+'|'+l.lot)}" aria-pressed="${!!on}"><span class="dboxh"><b>${esc(l.lot)}</b>${multi?`<span class="tlch" style="background:${tlCol(grp,c)}">${esc(ppShort(c.nom))}</span>`:''}</span><small>${esc([l.variete,l.pg].filter(Boolean).join(' / '))}</small>${inner}</button>`; }
 const dosLots=grp=>[].concat(...grp.map(c=>(c.lots||[]).slice().sort((a,b)=>String(a.lot).localeCompare(String(b.lot),undefined,{numeric:true})).map(l=>({c,l,k:c.id+'|'+l.lot}))));
-function dosChauffeBar(ch,grp){ return `<div class="dchs" id="d-chs">${grp.map(c=>{ chGrow(c); const n=chTodayJ(c)||lastDay(c); return `<button type="button" data-id="${esc(c.id)}" aria-pressed="${c.id===ch.id}"><i class="tldot" style="background:${tlCol(grp,c)}"></i>${esc(c.nom)}<small>${c.sortie?'✓':'J'+(n||'–')}</small></button>`; }).join('')}<button type="button" id="d-newch" class="dnew">${esc(L('+ Chauffe','+ Calefacción'))}</button></div>`; }
+function dosChauffeBar(ch,grp){ return `<div class="dchs" id="d-chs">${grp.map(c=>{ chGrow(c); const n=chTodayJ(c)||lastDay(c); return `<button type="button" data-id="${esc(c.id)}" aria-pressed="${c.id===ch.id}"><i class="tldot" style="background:${tlCol(grp,c)}"></i>${esc(c.nom)}<small>${c.sortie?'✓':'J'+(n||'–')}</small></button>`; }).join('')}<button type="button" id="d-newch" class="dnew" title="${esc(L('Ajouter une chauffe à cette saison','Agregar una calefacción a esta temporada'))}">${esc(L('+ Chauffe','+ Calefacción'))}</button></div>`; }
 function bindDosChauffeBar(ch){ const bar=$('d-chs'); if(!bar) return;
   bar.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>{ if(b.dataset.id===ch.id) return; const c=liveChauffes().find(x=>x.id===b.dataset.id); let j=1; if(c&&c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) j=Math.min(t,chGrow(c).duree); } S.chauffeId=b.dataset.id; S.jour=j; S.dosSel=null; renderChauffe(); });
   $('d-newch').onclick=()=>{ S.dossierSel=ch.dossier; try{ localStorage.setItem(LS+'dossier',ch.dossier); }catch(e){} go('new'); }; }
@@ -1401,7 +1404,9 @@ function tabApercu(ch, body){ const grp=dosGroup(ch)||[ch]; const T=todayIso(); 
       ${step('bilan','🔍',L('Triage','Selección'), tri.length+' / '+N, esc(rate!=null?L('réussite générale ','éxito general ')+pct(rate):L('lots triés','lotes seleccionados')), tri.length, N)}
       ${step('hist','🗺️',L('Suivi et plan','Seguimiento y plano'), '', esc(L('toutes les étapes, plan de la parcelle, registre','todas las etapas, plano de la parcela, registro')))}
     </div>
-    <button class="ghost" type="button" id="ap-tous">📋 ${esc(L('Tous les lots (sélection et notes)','Todos los lotes (selección y notas)'))}</button>`;
+    <button class="ghost" type="button" id="ap-tous">📋 ${esc(L('Tous les lots (sélection et notes)','Todos los lotes (selección y notas)'))}</button>
+    ${(()=>{ const d=dossierOf(ch); if(!d) return ''; try{ return fold('apsynth', esc(L('Synthèse et registre de la saison','Síntesis y registro de la temporada')), '', dosSynthHTML(d,dosSort(grp))); }catch(e){ return ''; } })()}`;
+  if($('h-dosreg')) $('h-dosreg').onclick=()=>{ S.dossierSel=ch.dossier; go('regdos'); };
   body.querySelectorAll('.apstep,.aptodo').forEach(b=>b.onclick=()=>{ if(b.dataset.cid&&b.dataset.cid!==ch.id){ S.chauffeId=b.dataset.cid; } if(b.dataset.tab==='jour'){ const c=curChauffe(); if(c&&c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) S.jour=Math.min(t,chGrow(c).duree); } } S.tab=b.dataset.tab; renderChauffe(); window.scrollTo({top:0}); });
   $('ap-tous').onclick=()=>{ S.tousFrom=ch.id; S.tousC='all'; S.tousS='all'; S.tousSel=new Set(); S.tousAct=null; S.tousDet=null; go('tous',{tousKey:'c:'+ch.id}); };
 }
@@ -1434,10 +1439,11 @@ function renderHome(){
   app.innerHTML=`<header class="top"><div class="title-row"><h1 class="brandh"><img class="brandi" src="icon-192.png" alt="" onerror="this.remove()">${esc(L(APP_NAME,'Diario de vivero'))}</h1><button class="ghost" id="h-set" type="button" style="flex:0 0 auto">Réglages</button></div><div class="brands">Vivero Richter <i>·</i> Pépinières Barnier</div></header>
   <section class="panel">${installHTML()}${syncbarHTML()}
     ${seedAvail?`<div class="card"><h3>Chauffe 1 de Raphaël</h3><p class="note">Les relevés et observations de la chauffe 1 (Vivero Richter, octobre 2026), prises par Raphaël, avec la liste des 27 lots, sont prêts à être ajoutés.</p><div class="list"><button class="primary" id="seed-me" type="button">Je suis Raphaël : ajouter à mon nom</button><button class="ghost" id="seed-ok" type="button">Ajouter (notes de Raphaël)</button><button class="ghost" id="seed-no" type="button">Pas maintenant</button></div></div>`:''}
-    <div class="field"><span class="lab">${esc(L('Dossiers','Carpetas'))}</span>${dossierBarHTML('h-dos',S.dossierSel,true)}${S.dosNew?`<div class="dosrow"><input id="h-dosn" type="text" placeholder="${esc(L('Ex. : Année 1, Saison 2027','Ej.: Año 1, Temporada 2027'))}" value="${esc(S.dosNew===true?'':S.dosNew)}"><button class="primary" type="button" id="h-dosok">${esc(L('Créer','Crear'))}</button><button class="ghost" type="button" id="h-dosx">${esc(L('Annuler','Cancelar'))}</button></div>`:''}${dsel&&!S.dosNew?`<div class="dosrow"><button class="linkbtn" type="button" id="h-dosren">${esc(L('Renommer','Renombrar'))}</button><button class="linkbtn" type="button" id="h-dosdel">${esc(L('Supprimer le dossier','Eliminar la carpeta'))}</button><span class="hint">${esc(L('Les saisons du dossier ne sont pas supprimées.','Las temporadas de la carpeta no se eliminan.'))}</span></div>`:''}</div>
-    <div class="homebtns"><button class="primary" id="h-new" type="button">${esc(L('+ Nouvelle chauffe','+ Nueva calefacción'))}${dsel?' · '+esc(dsel.nom):''}</button>${dsel&&list.length?`<button class="primary" id="h-dopen" type="button">📂 ${esc(L('Ouvrir le dossier','Abrir la carpeta'))} · ${esc(dsel.nom)}</button>`:''}<button class="${dsel&&list.length?'ghost':'primary'}" id="h-tous" type="button">📋 ${esc(L('Tous les lots','Todos los lotes'))}${dsel?' · '+esc(dsel.nom):''}</button><button class="ghost" id="h-cmp" type="button">${esc(L('Comparer les saisons','Comparar temporadas'))}</button></div>
-    ${dsel&&list.length?dosSynthHTML(dsel,list):''}
+    <div class="hhead" style="margin:6px 2px 0"><h2 class="secttl" style="margin:0">${esc(L('Saisons','Temporadas'))}</h2></div>
     <div class="list" id="h-list"></div>
+    ${S.dosNew?`<div class="card" style="gap:8px;border:2px solid var(--accent)"><b>${esc(S.dosRen?L('Renommer la saison','Renombrar la temporada'):L('Nouvelle saison','Nueva temporada'))}</b><div class="dosrow"><input id="h-dosn" type="text" placeholder="${esc(L('Ex. : Saison 2027','Ej.: Temporada 2027'))}" value="${esc(S.dosNew===true?'':S.dosNew)}"><button class="primary" type="button" id="h-dosok">${esc(S.dosRen?L('OK','OK'):L('Créer','Crear'))}</button><button class="ghost" type="button" id="h-dosx">${esc(L('Annuler','Cancelar'))}</button></div>${S.dosRen?`<button class="linkbtn" type="button" id="h-dosdel" style="color:var(--bad);justify-self:start">🗑 ${esc(L('Supprimer cette saison','Eliminar esta temporada'))}</button><span class="hint">${esc(L('Ses chauffes ne sont pas supprimées : elles iront dans « À ranger ».','Sus calefacciones no se eliminan: irán a « Por ordenar ».'))}</span>`:''}</div>`
+      :`<div class="homebtns"><button class="primary" id="h-snew" type="button">${esc(L('+ Nouvelle saison','+ Nueva temporada'))}</button><button class="ghost" id="h-cmp" type="button">${esc(L('Comparer les chauffes','Comparar calefacciones'))}</button></div>`}
+    <div id="h-loose"></div>
     ${fold('hshare', (Sync.active()?'Sauvegarde et partage par fichier':'Partager avec mes collaborateurs'), '', `    <div class="card">
       <h3>${Sync.active()?'Sauvegarde et partage par fichier':'Partager avec mes collaborateurs'}</h3>
       ${Sync.active()?'<p class="note">Le partage avec l\'équipe est automatique. Ces boutons servent à faire une sauvegarde (à garder dans iCloud Drive) ou à transmettre des photos.</p>':''}
@@ -1447,32 +1453,41 @@ function renderHome(){
     </div>`)}
     <p class="note" style="text-align:center">Notes signées : ${esc(S.me.nom)} · version ${appVer()}</p>
   </section>`;
-  const el=$('h-list');
-  if(!list.length) el.innerHTML='<div class="item empty">'+esc(L('Aucune chauffe pour l\'instant. Touche « + Nouvelle chauffe » pour commencer.','Ninguna calefacción por ahora. Toca « + Nueva calefacción » para empezar.'))+'</div>';
-  list.forEach(ch=>{ chGrow(ch);
-    const n=lastDay(ch), al=chauffeAlerts(ch), nb=entriesOf(ch.id).filter(e=>e.source!=='capteur').length;
-    const b=document.createElement('button'); b.type='button'; b.className='item chauffecard';
-    const its=(ch.lots||[]).map(l=>({c:ch,l,st:lotStage(ch,l)})); const enC=ch.debut&&!ch.sortie;
-    b.innerHTML=`<div class="hhead"><span class="d" style="font-size:18px">${esc(ch.nom)}</span><span class="mono">${enC?'🔥 J'+(n||'–')+' / '+ch.duree:esc(its.filter(x=>x.st==='plante'||x.st==='trie').length+' / '+its.length+L(' plantés',' plantados'))}</span></div>
-      ${its.length?stageBarHTML(its).replace('<div class="aplegend">','<div class="aplegend sm">'):`<div class="progress"><span style="width:${Math.min(100,n/ch.duree*100)}%"></span></div>`}
-      <div class="meta">${dossierOf(ch)&&(!S.dossierSel||S.dossierSel==='all')?'<span>📁 '+esc(dossierOf(ch).nom)+'</span>':''}${ch.etab&&ch.etab.nom?'<span><b>'+esc(ch.etab.nom)+'</b></span>':''}${ch.debut?'<span>Début '+esc(dayShort(ch,1))+'</span>':''}<span>${(ch.lots||[]).length} lots</span><span>${nb} note${nb>1?'s':''}</span>${al?'<span class="al">'+al+' alerte'+(al>1?'s':'')+'</span>':''}${chauffeRate(ch).rate!=null?'<span>'+esc(L('réussite ','éxito ')+pct(chauffeRate(ch).rate))+'</span>':''}${ch.archive?'<span>Archivée</span>':''}</div>${(()=>{ const x=plNextStep(ch); if(!x) return ''; const st=plStepStatus(x); return `<div class="nextstep ${st.cls}">⭐ ${esc(L('Prochaine étape : ','Próxima etapa: ')+x.label)} · ${esc(st.txt)}</div>`; })()}${rappelDue(ch)!=null?`<div class="rappel">⏱ ${esc(L('Pas de relevé depuis ','Sin lectura desde hace ')+fmtAge(rappelDue(ch)))}</div>`:''}`;
-    b.onclick=()=>{ const ln=lastDay(ch); let j=Math.max(1,ln||1); if(ch.debut){ const t=chDayOfIso(ch,todayIso()); if(t>=1) j=Math.min(t, chGrow(ch).duree); } go('chauffe',{chauffeId:ch.id, tab:'apercu', jour:j}); };
-    el.appendChild(b);
-  });
+  const el=$('h-list'); const allCh=liveChauffes(); const ds=dossiersAll();
+  const openSeason=d=>{ const chs=dosSort(allCh.filter(c=>c.dossier===d.id)); S.dossierSel=d.id; try{ localStorage.setItem(LS+'dossier',d.id); }catch(e){}
+    if(!chs.length){ go('new'); return; } const c=chs.find(x=>x.debut&&!x.sortie)||chs[chs.length-1]; let j=1; if(c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) j=Math.min(t,chGrow(c).duree); } S.dosDet=null; go('chauffe',{chauffeId:c.id, tab:'apercu', jour:j}); };
+  if(!ds.length) el.innerHTML='<div class="item empty">'+esc(L('Aucune saison pour l\'instant. Touche « + Nouvelle saison » pour commencer.','Ninguna temporada por ahora. Toca « + Nueva temporada » para empezar.'))+'</div>';
+  ds.slice().sort((x,y)=>String(y.nom).localeCompare(String(x.nom),undefined,{numeric:true})).forEach(d=>{ const chs=dosSort(allCh.filter(c=>c.dossier===d.id)); const its=apItems(chs);
+    const enC=chs.filter(c=>c.debut&&!c.sortie&&chTodayJ(c));
+    const w=document.createElement('div'); w.className='seasonw';
+    const b=document.createElement('button'); b.type='button'; b.className='item chauffecard seasoncard';
+    b.innerHTML=`<div class="hhead"><span class="d" style="font-size:20px">📂 ${esc(d.nom)}</span><span class="mono">${esc(its.filter(x=>x.st==='plante'||x.st==='trie').length+' / '+its.length+L(' plantés',' plantados'))}</span></div>
+      ${its.length?stageBarHTML(its).replace('<div class="aplegend">','<div class="aplegend sm">'):''}
+      <div class="meta"><span>${esc(chs.length?chs.map(c=>c.nom).join(' · '):L('aucune chauffe','ninguna calefacción'))}</span>${enC.length?'<span>🔥 '+esc(enC.map(c=>ppShort(c.nom)+' J'+chTodayJ(c)).join(', '))+'</span>':''}</div>`;
+    b.onclick=()=>openSeason(d);
+    const e=document.createElement('button'); e.type='button'; e.className='linkbtn seasonedit'; e.textContent=L('Renommer','Renombrar'); e.onclick=()=>{ S.dosRen=d.id; S.dosNew=d.nom; renderHome(); setTimeout(()=>{ const i=$('h-dosn'); if(i) i.focus(); },30); };
+    w.appendChild(b); w.appendChild(e); el.appendChild(w); });
+  // chauffes sans saison : à ranger
+  const loose=allCh.filter(c=>!dossierOf(c));
+  if(loose.length){ $('h-loose').innerHTML=`<div class="card" style="gap:8px"><b>${esc(L('Chauffes à ranger dans une saison','Calefacciones por ordenar en una temporada'))}</b><p class="hint" style="margin:0">${esc(L('Choisis la saison de chaque chauffe : elle apparaîtra dedans.','Elige la temporada de cada calefacción: aparecerá dentro.'))}</p>
+      ${loose.map(c=>`<div class="looserow"><span><b>${esc(c.nom)}</b> <small class="hint">${esc((c.lots||[]).length+L(' lots',' lotes'))}</small></span><select data-loose="${esc(c.id)}"><option value="">${esc(L('Ranger dans…','Ordenar en…'))}</option>${ds.map(d=>`<option value="${esc(d.id)}">${esc(d.nom)}</option>`).join('')}<option value="+new">${esc(L('+ Nouvelle saison…','+ Nueva temporada…'))}</option></select></div>`).join('')}</div>`;
+    document.querySelectorAll('[data-loose]').forEach(sl=>sl.onchange=async()=>{ let v=sl.value; if(!v) return; const c=liveChauffes().find(x=>x.id===sl.dataset.loose); if(!c) return;
+      if(v==='+new'){ const nom=prompt(L('Nom de la nouvelle saison','Nombre de la nueva temporada'),L('Saison ','Temporada ')+((c.debut||c.creeLe||todayIso()).slice(0,4))); if(!nom){ sl.value=''; return; } v=(await dossierCreate(nom.trim())).id; }
+      await saveChauffe(Object.assign({},c,{dossier:v})); toast(c.nom+L(' rangée.',' ordenada.')); renderHome(); }); }
   bindInstall(); bindSyncbar();
-  $('h-new').onclick=()=>go('new');
+  if($('h-snew')) $('h-snew').onclick=()=>{ S.dosNew=true; S.dosRen=null; renderHome(); setTimeout(()=>{ const i=$('h-dosn'); if(i) i.focus(); },30); };
   if($('h-dos')) $('h-dos').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const v=b.dataset.v; if(v==='+new'){ S.dosNew=true; renderHome(); setTimeout(()=>{ const i=$('h-dosn'); if(i) i.focus(); },30); return; } S.dossierSel=v; S.dosNew=null; S.dosRen=null; try{ localStorage.setItem(LS+'dossier',v); }catch(e){} renderHome(); });
   if($('h-dosx')) $('h-dosx').onclick=()=>{ S.dosNew=null; S.dosRen=null; renderHome(); };
   if($('h-dosok')) $('h-dosok').onclick=async()=>{ const nom=$('h-dosn').value.trim(); if(!nom){ $('h-dosn').focus(); return; }
-    if(S.dosRen){ const d=dossiersAll().find(x=>x.id===S.dosRen); if(d) await saveEntry(Object.assign({},d,{nom})); toast(L('Dossier renommé.','Carpeta renombrada.')); }
-    else { const d=await dossierCreate(nom); S.dossierSel=d.id; try{ localStorage.setItem(LS+'dossier',d.id); }catch(e){} toast(L('Dossier créé : ','Carpeta creada: ')+nom+'.'); }
+    if(S.dosRen){ const d=dossiersAll().find(x=>x.id===S.dosRen); if(d) await saveEntry(Object.assign({},d,{nom})); toast(L('Saison renommée.','Temporada renombrada.')); }
+    else { const d=await dossierCreate(nom); S.dossierSel=d.id; try{ localStorage.setItem(LS+'dossier',d.id); }catch(e){} S.dosNew=null; S.dosRen=null; toast(L('Saison créée : ajoute sa première chauffe.','Temporada creada: agrega su primera calefacción.')); go('new'); return; }
     S.dosNew=null; S.dosRen=null; renderHome(); };
-  if($('h-dosren')) $('h-dosren').onclick=()=>{ S.dosRen=S.dossierSel; S.dosNew=dossiersAll().find(x=>x.id===S.dossierSel).nom; renderHome(); };
-  if($('h-dosdel')){ let c=false; $('h-dosdel').onclick=async()=>{ if(!c){ c=true; $('h-dosdel').textContent=L('Toucher encore pour supprimer le dossier','Tocar otra vez para eliminar la carpeta'); return; } const d=dossiersAll().find(x=>x.id===S.dossierSel); if(d) await removeEntry(d); S.dossierSel='all'; toast(L('Dossier supprimé. Ses saisons sont maintenant « sans dossier ».','Carpeta eliminada. Sus temporadas quedan « sin carpeta ».')); renderHome(); }; }
-  $('h-cmp').onclick=()=>go('compare');
-  if($('h-dopen')) $('h-dopen').onclick=()=>{ const c=dosSort(list)[0]; let j=1; if(c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) j=Math.min(t,chGrow(c).duree); } S.dosDet=null; go('chauffe',{chauffeId:c.id, tab:'apercu', jour:j}); };
-  if($('h-tous')) $('h-tous').onclick=()=>{ S.tousFrom=null; S.tousC='all'; S.tousS='all'; S.tousSel=new Set(); S.tousAct=null; S.tousDet=null; go('tous',{tousKey:dsel?'d:'+dsel.id:'all'}); };
-  if($('h-dosreg')) $('h-dosreg').onclick=()=>go('regdos');
+  if(false&&$('h-dosren')) $('h-dosren').onclick=()=>{ S.dosRen=S.dossierSel; S.dosNew=dossiersAll().find(x=>x.id===S.dossierSel).nom; renderHome(); };
+  if($('h-dosdel')){ let c=false; $('h-dosdel').onclick=async()=>{ if(!c){ c=true; $('h-dosdel').textContent=L('Toucher encore pour supprimer la saison','Tocar otra vez para eliminar la temporada'); return; } const d=dossiersAll().find(x=>x.id===S.dosRen); S.dosNew=null; S.dosRen=null; if(d) await removeEntry(d); S.dossierSel='all'; toast(L('Dossier supprimé. Ses saisons sont maintenant « sans dossier ».','Carpeta eliminada. Sus temporadas quedan « sin carpeta ».')); renderHome(); }; }
+  if($('h-cmp')) $('h-cmp').onclick=()=>go('compare');
+  if(false&&$('h-dopen')) $('h-dopen').onclick=()=>{ const c=dosSort(list)[0]; let j=1; if(c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) j=Math.min(t,chGrow(c).duree); } S.dosDet=null; go('chauffe',{chauffeId:c.id, tab:'apercu', jour:j}); };
+  if(false&&$('h-tous')) $('h-tous').onclick=()=>{ S.tousFrom=null; S.tousC='all'; S.tousS='all'; S.tousSel=new Set(); S.tousAct=null; S.tousDet=null; go('tous',{tousKey:dsel?'d:'+dsel.id:'all'}); };
+
   $('h-set').onclick=()=>go('settings');
   if(seedAvail){ $('seed-me').onclick=()=>importSeed(true); $('seed-ok').onclick=()=>importSeed(false); $('seed-no').onclick=async()=>{ S.seedHidden=true; await DB.put('reglages',true,'seedHidden'); render(); }; }
   $('h-share').onclick=()=>exportAll($('h-st'));
