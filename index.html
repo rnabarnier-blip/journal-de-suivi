@@ -479,6 +479,23 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .ppdelrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.ppdelx{min-height:40px;padding:4px 10px;display:inline-flex;align-items:center;gap:6px}
 .ppdelp{justify-self:center;color:var(--bad)}.ppdelp.arm{font-weight:800}
 .tldech,.tldecr{grid-template-columns:44px minmax(0,1fr) minmax(0,1fr)!important}.tldecr input{width:100%;min-width:0}
+.dchs{display:flex;gap:6px;overflow-x:auto;padding:6px 0 2px;-webkit-overflow-scrolling:touch}
+.dchs button{flex:none;min-height:42px;padding:4px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);font-weight:700;font-size:15px;display:inline-flex;align-items:center;gap:7px}
+.dchs button small{font-weight:600;color:var(--muted);font-size:12.5px}
+.dchs button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.dchs .dnew{border-style:dashed;color:var(--accent)}
+.ddetbar{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;padding:6px 2px 0}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.dbox{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:8px 10px;border-radius:14px;border:2px solid var(--line);background:var(--surface);color:var(--fg);text-align:left;position:relative}
+.dbox.on{border-color:var(--accent);background:var(--accent-soft)}
+.dbox.on::after{content:'✓';position:absolute;top:6px;right:8px;width:22px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:14px}
+.dbox.dis{opacity:.55}
+.dboxh{display:flex;align-items:center;gap:6px}.dboxh b{font-size:22px;line-height:1}
+.dbox small{font-size:12px;color:var(--muted);line-height:1.25}.dbox .dst{color:var(--fg);font-weight:600}.dbox .dst.ok{color:var(--ok)}
+.dchips{display:flex;flex-wrap:wrap;gap:5px}.dchip{display:inline-flex;align-items:center;gap:4px;border-radius:8px;background:var(--sunk);padding:3px 8px;font-size:14px}
+.dchip i{font-style:normal;color:#fff;font-size:11px;font-weight:800;border-radius:5px;padding:1px 5px}
+.dpick{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:10px}
+.dplace .row .primary,.dplace .row .ghost{min-height:48px}
 </style>
 </head>
 <body>
@@ -499,7 +516,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.69.0';
+const APP_VERSION = '2.70.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1215,6 +1232,120 @@ function bindTousDet(x){ const c=x.c, lot=String(x.l.lot);
     else await saveEntry(Object.assign({},e,{supprime:true}));
     toast(L('Supprimé.','Eliminado.')); renderTous(); }; }); }
 
+/* ===================== DOSSIER : toutes les chauffes dans les mêmes onglets =====================
+   Une chauffe rangée dans un dossier s'ouvre dans la vue dossier : en haut, les chauffes du dossier (C1, C2…)
+   et « + Chauffe ». Greffage, Chauffe, Frigo, Triage, Infos : pour la chauffe choisie.
+   Acclimatation et Décaissage : tous les lots du dossier ensemble (cases à toucher, comme la plantation).
+   Chaque information est enregistrée dans la chauffe d'origine du lot. */
+const dosGroup=ch=>{ const d=dossierOf(ch); if(!d) return null; return liveChauffes().filter(c=>c.dossier===d.id).sort((a,b)=>String(a.nom).localeCompare(String(b.nom),undefined,{numeric:true})); };
+const dIsoAdd=(iso,n)=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const dDayIdx=(deb,iso)=>Math.round((new Date(iso+'T12:00:00')-new Date(deb+'T12:00:00'))/864e5)+1;
+function dosLotBox(grp,c,l,inner,on,dis){ const multi=grp.length>1; return `<button type="button" class="dbox${on?' on':''}${dis?' dis':''}" data-k="${esc(c.id+'|'+l.lot)}" aria-pressed="${!!on}"><span class="dboxh"><b>${esc(l.lot)}</b>${multi?`<span class="tlch" style="background:${tlCol(grp,c)}">${esc(ppShort(c.nom))}</span>`:''}</span><small>${esc([l.variete,l.pg].filter(Boolean).join(' / '))}</small>${inner}</button>`; }
+const dosLots=grp=>[].concat(...grp.map(c=>(c.lots||[]).slice().sort((a,b)=>String(a.lot).localeCompare(String(b.lot),undefined,{numeric:true})).map(l=>({c,l,k:c.id+'|'+l.lot}))));
+function dosChauffeBar(ch,grp){ return `<div class="dchs" id="d-chs">${grp.map(c=>{ chGrow(c); const n=lastDay(c); return `<button type="button" data-id="${esc(c.id)}" aria-pressed="${c.id===ch.id}"><i class="tldot" style="background:${tlCol(grp,c)}"></i>${esc(c.nom)}<small>${c.sortie?'✓':'J'+(n||'–')}</small></button>`; }).join('')}<button type="button" id="d-newch" class="dnew">${esc(L('+ Chauffe','+ Calefacción'))}</button></div>`; }
+function bindDosChauffeBar(ch){ const bar=$('d-chs'); if(!bar) return;
+  bar.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>{ if(b.dataset.id===ch.id) return; const c=liveChauffes().find(x=>x.id===b.dataset.id); let j=1; if(c&&c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) j=Math.min(t,chGrow(c).duree); } S.chauffeId=b.dataset.id; S.jour=j; S.dosSel=null; renderChauffe(); });
+  $('d-newch').onclick=()=>{ S.dossierSel=ch.dossier; try{ localStorage.setItem(LS+'dossier',ch.dossier); }catch(e){} go('new'); }; }
+/* ---------- ACCLIMATATION du dossier ---------- */
+const accKey=X=>String(X.lieu||'').trim().toLowerCase()||('#'+X.id);
+function dosPlaces(grp){ const m={}, order=[]; grp.forEach(c=>accList(c).forEach(X=>{ const k=accKey(X); if(!m[k]){ m[k]={k, nom:accName(c,X), phase:X.phase||'avant', items:[], deb:X.debut}; order.push(k); } m[k].items.push({c,X}); if(X.debut&&(!m[k].deb||X.debut<m[k].deb)) m[k].deb=X.debut; })); return order.map(k=>m[k]); }
+function placePresent(P,iso){ const out=[]; P.items.forEach(({c,X})=>{ if(!X.debut) return; const A=dDayIdx(X.debut,iso); if(A<1) return; const s=accPresent(c,X,A); (c.lots||[]).forEach(l=>{ if(s.has(String(l.lot))) out.push({c,l,k:c.id+'|'+l.lot,X}); }); }); return out; }
+function tabAccDos(ch, body, grp){ const T=todayIso(); const places=dosPlaces(grp); const all=dosLots(grp);
+  const where={}; places.forEach(P=>placePresent(P,T).forEach(x=>{ (where[x.k]=where[x.k]||[]).push(P.nom); }));
+  const mode=S.dosAcc; // {k:placeKey, m:'in'|'out'} ou {m:'new'}
+  const sel=S.dosSel||(S.dosSel=new Set());
+  const cardP=P=>{ const pres=placePresent(P,T); const px=pres.reduce((a,x)=>a+(accPxFor(x.c,x.X,x.l.lot,T)||0),0); const open=mode&&mode.k===P.k;
+    let pick='';
+    if(open){ const cand=mode.m==='in'?all.filter(x=>!pres.some(y=>y.k===x.k)&&!plFini(plLotOf(x.c,x.l.lot))):pres;
+      pick=`<div class="dpick"><span class="lab">${esc(mode.m==='in'?L('Touche les lots qui entrent','Toca los lotes que entran'):L('Touche les lots qui sortent','Toca los lotes que salen'))}</span>
+        <div class="dgrid">${cand.map(x=>dosLotBox(grp,x.c,x.l,`<small class="dst">${esc(mode.m==='in'?((where[x.k]||[]).join(', ')||tlStName(lotStage(x.c,x.l))):(fmtN(accPxFor(x.c,x.X,x.l.lot,T)||0)+' px'))}</small>`,sel.has(x.k))).join('')||`<span class="hint">${esc(L('Aucun lot à choisir.','Ningún lote para elegir.'))}</span>`}</div>
+        <div class="row" style="align-items:center"><label class="small" for="da-d">${esc(L('Date','Fecha'))}</label><input id="da-d" type="date" value="${esc(S.dosD||T)}" style="max-width:190px"></div>
+        <div class="row"><button class="primary" type="button" id="da-ok">${esc((mode.m==='in'?L('Entrer ','Entrar ')+'':L('Sortir ','Sacar '))+plural(sel.size,'lot','lots','lote','lotes'))}</button><button class="ghost" type="button" id="da-x">${esc(L('Annuler','Cancelar'))}</button></div><div class="status" id="da-st"></div></div>`; }
+    return `<div class="card dplace" style="gap:8px"><div class="hhead"><h3 style="margin:0">${esc(P.nom)}</h3><span class="small">${esc(P.phase==='apres'?L('après décaissage','después del desencajonado'):L('avant décaissage','antes del desencajonado'))}</span></div>
+      <div class="hint">${esc(plural(pres.length,'lot','lots','lote','lotes')+(px?' · '+fmtN(Math.round(px*100)/100)+' palox':'')+L(" aujourd'hui"," hoy"))}</div>
+      ${pres.length?`<div class="dchips">${pres.map(x=>`<span class="dchip"><b>${esc(x.l.lot)}</b>${grp.length>1?`<i style="background:${tlCol(grp,x.c)}">${esc(ppShort(x.c.nom))}</i>`:''}</span>`).join('')}</div>`:''}
+      ${open?pick:`<div class="row"><button class="primary" type="button" data-pin="${esc(P.k)}">${esc(L('+ Entrer des lots','+ Entrar lotes'))}</button>${pres.length?`<button class="ghost" type="button" data-pout="${esc(P.k)}">${esc(L('− Sortir des lots','− Sacar lotes'))}</button>`:''}</div>`}</div>`; };
+  const nowhere=all.filter(x=>!where[x.k]&&['sorti','decaisse','enplant'].includes(lotStage(x.c,x.l)));
+  body.innerHTML=`<p class="note">${esc(L("Les endroits d'acclimatation de toutes les chauffes du dossier. Touche « Entrer » ou « Sortir », puis les lots. Les lots décaissés (avant décaissage) et les lots plantés partent tout seuls.","Los lugares de aclimatación de todas las calefacciones de la carpeta. Toca « Entrar » o « Sacar », luego los lotes. Los lotes desencajonados (antes del desencajonado) y los plantados salen solos."))}</p>
+    ${nowhere.length?`<div class="card" style="gap:6px;background:var(--warn-soft)"><b>${esc(L('Sortis de chauffe, dans aucun endroit','Salidos de calefacción, en ningún lugar'))} (${nowhere.length})</b><div class="dchips">${nowhere.map(x=>`<span class="dchip"><b>${esc(x.l.lot)}</b>${grp.length>1?`<i style="background:${tlCol(grp,x.c)}">${esc(ppShort(x.c.nom))}</i>`:''}</span>`).join('')}</div></div>`:''}
+    ${places.map(cardP).join('')||`<div class="rel none">${esc(L('Aucun endroit pour l\'instant.','Ningún lugar por ahora.'))}</div>`}
+    ${mode&&mode.m==='new'?`<div class="card" style="gap:8px;border:2px solid var(--accent)"><h3 style="margin:0">${esc(L('Nouvel endroit','Nuevo lugar'))}</h3>
+      <div class="field"><label for="dn-nom">${esc(L('Nom','Nombre'))}</label><input id="dn-nom" type="text" placeholder="${esc(L('Ex. : Tunnel, Porche, Toile','Ej.: Túnel, Porche, Malla'))}"></div>
+      <div class="field"><span class="lab">${esc(L('Les plants y vont','Las plantas van'))}</span><div class="seg" id="dn-ph"><button type="button" data-v="avant" aria-pressed="true">${esc(L('avant décaissage','antes del desencajonado'))}</button><button type="button" data-v="apres" aria-pressed="false">${esc(L('après décaissage','después del desencajonado'))}</button></div></div>
+      <div class="row"><button class="primary" type="button" id="dn-ok">${esc(L('Créer','Crear'))}</button><button class="ghost" type="button" id="dn-x">${esc(L('Annuler','Cancelar'))}</button></div><div class="status" id="dn-st"></div></div>`
+      :`<button class="ghost" type="button" id="dn-open">${esc(L('+ Nouvel endroit','+ Nuevo lugar'))}</button>`}
+    <details class="gsec" style="margin-top:10px"><summary>${esc(L('Relevés, températures et réglages : ','Lecturas, temperaturas y ajustes: ')+ch.nom)}</summary><div class="gsecb"><button class="ghost" type="button" id="d-accdet">${esc(L('Ouvrir l\'acclimatation détaillée de ','Abrir la aclimatación detallada de ')+ch.nom)}</button></div></details>`;
+  const re=()=>{ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); };
+  body.querySelectorAll('[data-pin],[data-pout]').forEach(b=>b.onclick=()=>{ S.dosAcc={k:b.dataset.pin||b.dataset.pout, m:b.dataset.pin?'in':'out'}; S.dosSel=new Set(); S.dosD=todayIso(); re(); });
+  body.querySelectorAll('.dpick .dbox').forEach(b=>b.onclick=()=>{ const k=b.dataset.k; sel.has(k)?sel.delete(k):sel.add(k); b.classList.toggle('on'); b.setAttribute('aria-pressed',sel.has(k)); const ok=$('da-ok'); if(ok) ok.textContent=(S.dosAcc.m==='in'?L('Entrer ','Entrar '):L('Sortir ','Sacar '))+plural(sel.size,'lot','lots','lote','lotes'); });
+  if($('da-x')) $('da-x').onclick=()=>{ S.dosAcc=null; S.dosSel=null; re(); };
+  if($('da-d')) $('da-d').onchange=()=>{ S.dosD=$('da-d').value; };
+  if($('da-ok')) $('da-ok').onclick=async()=>{ const D=$('da-d').value||T; const st=$('da-st'); if(!sel.size){ st.textContent=L('Touche au moins un lot.','Toca al menos un lote.'); st.className='status err'; return; }
+    const P=places.find(p=>p.k===S.dosAcc.k); const m=S.dosAcc.m; const tpl=P.items[0].X; const moves=[]; const touched=new Set();
+    for(const k of sel){ const [cid,lot]=[k.slice(0,k.indexOf('|')), k.slice(k.indexOf('|')+1)]; let c=liveChauffes().find(x=>x.id===cid); if(!c) continue;
+      let X=accList(c).find(Y=>accKey(Y)===P.k);
+      if(!X){ X=accNorm(Object.assign({}, tpl, {id:'a'+uid().slice(-6), debut:D, fin:'', lots:[], explicit:true})); const list=accList(c).concat([X]); await saveChauffe(Object.assign({},c,{acclims:list})); c=liveChauffes().find(x=>x.id===cid); }
+      else if(m==='in'&&!touched.has(c.id+':'+X.id)&&!(X.lots&&X.lots.length)&&!accMoves(c,X).some(z=>z.action==='in')){ // l'endroit contenait « tous les lots » par défaut : on fige la liste avant d'ajouter
+        const fixed=Object.assign({},X,{lots:[...accStartSet(c,X)], explicit:true}); await saveChauffe(Object.assign({},c,{acclims:accList(c).map(Y=>Y.id===X.id?fixed:Y)})); c=liveChauffes().find(x=>x.id===cid); X=fixed; }
+      if(X.debut&&D<X.debut){ await saveChauffe(Object.assign({},c,{acclims:accList(c).map(Y=>Y.id===X.id?Object.assign({},Y,{debut:D}):Y)})); // l'endroit commence plus tôt : on décale les jours déjà notés
+        const sh=dDayIdx(D,X.debut)-1; const old=S.entrees.filter(e=>!e.supprime&&e.chauffeId===c.id&&(e.accId||'a1')===X.id&&typeof e.ajour==='number').map(e=>Object.assign({},e,{ajour:e.ajour+sh})); if(old.length) await saveEntries(old); X=Object.assign({},X,{debut:D}); }
+      touched.add(c.id+':'+X.id); moves.push({id:uid(), type:'accmv', chauffeId:c.id, accId:X.id, ajour:X.debut?dDayIdx(X.debut,D):1, lot, action:m, auteurId:S.me.id, auteurNom:S.me.nom, creeLe:nowIso()});
+      if(m==='in') places.filter(Q=>Q.k!==P.k).forEach(Q=>Q.items.forEach(({c:c2,X:Y})=>{ if(c2.id!==cid||!Y.debut) return; const A=dDayIdx(Y.debut,D); if(A<1) return; if(accPresent(c2,Y,A).has(String(lot))) moves.push({id:uid(), type:'accmv', chauffeId:cid, accId:Y.id, ajour:A, lot, action:'out', auteurId:S.me.id, auteurNom:S.me.nom, creeLe:nowIso()}); })); }
+    await saveEntries(moves); toast(plural(sel.size,'lot','lots','lote','lotes')+(m==='in'?L(' entré(s) : ',' entrado(s): '):L(' sorti(s) : ',' salido(s): '))+P.nom+'.'); S.dosAcc=null; S.dosSel=null; re(); };
+  if($('dn-open')) $('dn-open').onclick=()=>{ S.dosAcc={m:'new'}; re(); setTimeout(()=>{ const i=$('dn-nom'); if(i) i.focus(); },30); };
+  if($('dn-x')) $('dn-x').onclick=()=>{ S.dosAcc=null; re(); };
+  if($('dn-ph')) $('dn-ph').querySelectorAll('button').forEach(b=>b.onclick=()=>{ $('dn-ph').dataset.v=b.dataset.v; $('dn-ph').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+  if($('dn-ok')) $('dn-ok').onclick=async()=>{ const nom=$('dn-nom').value.trim(); if(!nom){ $('dn-st').textContent=L('Donne un nom.','Ponle un nombre.'); $('dn-st').className='status err'; return; }
+    if(places.some(p=>p.k===nom.toLowerCase())){ $('dn-st').textContent=L('Cet endroit existe déjà.','Este lugar ya existe.'); $('dn-st').className='status err'; return; }
+    const X=accNorm({id:'a'+uid().slice(-6), lieu:nom, debut:todayIso(), phase:$('dn-ph').dataset.v||'avant', lots:[], explicit:true}); const c=curChauffe(); await saveChauffe(Object.assign({},c,{acclims:accList(c).concat([X])})); S.dosAcc=null; toast(L('Endroit créé.','Lugar creado.')); re(); };
+  $('d-accdet').onclick=()=>{ S.dosDet='acc'; renderChauffe(); window.scrollTo({top:0}); };
+}
+/* ---------- DÉCAISSAGE du dossier ---------- */
+function tabDecDos(ch, body, grp){ const T=todayIso(); const all=dosLots(grp); const sel=S.dosSel||(S.dosSel=new Set()); const form=S.dosDec;
+  const st=x=>{ const d=decDone(x.c,x.l.lot); if(d) return {done:true, t:'✓ '+(d.dDeb?isoFr(d.dDeb).slice(0,5):'')+' · '+fmtN(d.pDec)+'→'+fmtN(d.pRem)+' px'+(d.cire?' · '+L('cire','cera'):'')}; const s=lotStage(x.c,x.l); return {done:false, t:s==='chauffe'?L('en chauffe','en calefacción'):(x.l.palox?fmtN(x.l.palox)+' px · ':'')+L('à décaisser','por desencajonar'), wait:s==='chauffe'}; };
+  const todo=all.filter(x=>!st(x).done), done=all.filter(x=>st(x).done);
+  const fil=S.dosDecF||'todo'; const vis=fil==='todo'?todo:fil==='done'?done:all;
+  const selL=all.filter(x=>sel.has(x.k));
+  const dayTot=(()=>{ let n=0; done.forEach(x=>{ const d=decDone(x.c,x.l.lot); const pj=d.pxJours||{}; if(Object.keys(pj).length) n+=Number(pj[T])||0; else if(d.dDeb===T) n+=Number(d.pDec)||0; }); return n; })();
+  body.innerHTML=`<p class="note">${esc(L("Tous les lots du dossier. Touche les cases des lots décaissés, puis « Noter le décaissage » : les palox sont déjà remplis, il suffit de corriger.","Todos los lotes de la carpeta. Toca las casillas de los lotes desencajonados y luego « Anotar el desencajonado »: los palox ya están llenos, solo hay que corregir."))}</p>
+    <div class="hint">${esc(done.length+' / '+all.length+L(' lots décaissés',' lotes desencajonados')+(dayTot?' · '+L("aujourd'hui : ","hoy: ")+fmtN(dayTot)+' palox':''))}</div>
+    <div class="tlfil" id="dd-f">${[['todo',L('À décaisser','Por desencajonar'),todo.length],['done',L('Décaissés','Desencajonados'),done.length],['all',L('Tous','Todos'),all.length]].map(([k,t,n])=>`<button type="button" data-v="${k}" aria-pressed="${fil===k}">${esc(t)} <small>${n}</small></button>`).join('')}</div>
+    ${form?decDosFormHTML(selL):''}
+    <div class="dgrid" id="dd-grid">${vis.map(x=>{ const s=st(x); return dosLotBox(grp,x.c,x.l,`<small class="dst${s.done?' ok':''}">${esc(s.t)}</small>`,sel.has(x.k),s.wait); }).join('')||`<span class="hint">${esc(L('Aucun lot ici.','Ningún lote aquí.'))}</span>`}</div>
+    <div style="height:${sel.size&&!form?110:10}px"></div>
+    ${sel.size&&!form?`<div class="tlact"><div class="tlactin"><div class="tlacth"><b>${esc(plural(sel.size,'lot choisi','lots choisis','lote elegido','lotes elegidos'))}</b><button class="linkbtn" type="button" id="dd-clear">${esc(L('Vider','Vaciar'))}</button></div><button class="primary big" type="button" id="dd-go">${esc(L('Noter le décaissage','Anotar el desencajonado'))}</button></div></div>`:''}
+    <details class="gsec" style="margin-top:10px"><summary>${esc(L('Palox par jour, place dans la chambre, acclimatation dehors : ','Palox por día, lugar en la cámara, aclimatación afuera: ')+ch.nom)}</summary><div class="gsecb"><button class="ghost" type="button" id="d-decdet">${esc(L('Ouvrir le décaissage détaillé de ','Abrir el desencajonado detallado de ')+ch.nom)}</button></div></details>`;
+  const re=()=>{ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); };
+  $('dd-f').querySelectorAll('button').forEach(b=>b.onclick=()=>{ S.dosDecF=b.dataset.v; re(); });
+  body.querySelectorAll('#dd-grid .dbox').forEach(b=>b.onclick=()=>{ if(form) return; const k=b.dataset.k; sel.has(k)?sel.delete(k):sel.add(k); re(); });
+  if($('dd-clear')) $('dd-clear').onclick=()=>{ sel.clear(); re(); };
+  if($('dd-go')) $('dd-go').onclick=()=>{ S.dosDec=true; renderChauffe(); window.scrollTo({top:0}); };
+  $('d-decdet').onclick=()=>{ S.dosDet='dec'; renderChauffe(); window.scrollTo({top:0}); };
+  if(form) bindDecDosForm(selL);
+}
+function decDosFormHTML(selL){ const T=todayIso(); const one=selL.length===1?decDone(selL[0].c,selL[0].l.lot):null;
+  return `<div class="card tlsheet" style="gap:10px"><div class="hhead"><h3 style="margin:0">${esc(L('Décaissage','Desencajonado'))} · ${esc(plural(selL.length,'lot','lots','lote','lotes'))}</h3><button class="linkbtn" type="button" id="df-x">${esc(L('Annuler','Cancelar'))}</button></div>
+    <div class="two"><div class="field"><label for="df-d">${esc(L('Date (début)','Fecha (inicio)'))}</label><input id="df-d" type="date" value="${esc(one&&one.dDeb||T)}"></div><div class="field"><label for="df-df">${esc(L('Fin si sur plusieurs jours','Fin si en varios días'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="df-df" type="date" value="${esc(one&&one.dFin||'')}"></div></div>
+    <div class="tldec"><div class="tldech"><span>${esc(L('Lot','Lote'))}</span><span>${esc(L('Décaissés','Vaciados'))}</span><span>${esc(L('Re-remplis','Rellenados'))}</span></div>${selL.map(x=>{ const d=decDone(x.c,x.l.lot)||entriesOf(x.c.id,'decaisse').find(z=>String(z.lot)===String(x.l.lot)); const px=x.l.palox?fmtN(x.l.palox):''; return `<div class="tldecr"><b>${esc(x.l.lot)}</b><input class="num" data-pd="${esc(x.k)}" inputmode="decimal" value="${d&&d.pDec!=null?esc(fmtN(d.pDec)):esc(px)}" placeholder="px"><input class="num" data-pr="${esc(x.k)}" inputmode="decimal" value="${d&&d.pRem!=null?esc(fmtN(d.pRem)):esc(px)}" placeholder="px"></div>`; }).join('')}</div>
+    <div class="field"><span class="lab">${esc(L('Cire remise ?','¿Se volvió a encerar?'))}</span><div class="seg" id="df-cire" data-v="${one&&one.cire===false?'0':'1'}"><button type="button" data-v="1" aria-pressed="${!(one&&one.cire===false)}">${esc(L('Oui','Sí'))}</button><button type="button" data-v="0" aria-pressed="${!!(one&&one.cire===false)}">${esc(L('Non','No'))}</button></div></div>
+    <div class="two"><div class="field"><label for="df-pl">${esc(L('Place dans la chambre','Lugar en la cámara'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="df-pl" type="text" value="${esc(one&&one.place||'')}"></div><div class="field"><label for="df-r">${esc(L('Remarque','Observación'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="df-r" type="text" value="${esc(one&&one.remarque||'')}"></div></div>
+    <button class="primary big" type="button" id="df-ok">${esc(L('Enregistrer','Guardar'))}</button><div class="status" id="df-st"></div>
+    ${selL.some(x=>decDone(x.c,x.l.lot))?`<button class="linkbtn" type="button" id="df-del" style="color:var(--bad)">🗑 ${esc(L('Effacer le décaissage de ces lots','Borrar el desencajonado de estos lotes'))}</button>`:''}</div>`; }
+function bindDecDosForm(selL){ const st=$('df-st'); const err=t=>{ st.textContent=t; st.className='status err'; }; const re=()=>{ renderChauffe(); window.scrollTo({top:0}); };
+  $('df-x').onclick=()=>{ S.dosDec=null; renderChauffe(); };
+  $('df-cire').querySelectorAll('button').forEach(b=>b.onclick=()=>{ $('df-cire').dataset.v=b.dataset.v; $('df-cire').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+  $('df-ok').onclick=async()=>{ const dd=$('df-d').value, df0=$('df-df').value; const df=df0&&df0!==dd?df0:''; if(!dd) return err(L('Indique la date du décaissage.','Indica la fecha del desencajonado.')); if(df&&df<dd) return err(L('La date de fin est avant la date de début.','La fecha de fin es antes de la fecha de inicio.'));
+    const cire=$('df-cire').dataset.v!=='0'; const pl=$('df-pl').value.trim(), rq=$('df-r').value.trim(); const out=[];
+    for(const x of selL){ const c=x.c, lot=String(x.l.lot); const pd=num(document.querySelector('[data-pd="'+CSS.escape(x.k)+'"]').value), pr=num(document.querySelector('[data-pr="'+CSS.escape(x.k)+'"]').value);
+      if(!(pd>0)) return err(L('Indique les palox décaissés du lot ','Indica los palox vaciados del lote ')+lot+'.'); if(pr==null||pr<0) return err(L('Indique les palox re-remplis du lot ','Indica los palox rellenados del lote ')+lot+L(' (0 si aucun).',' (0 si ninguno).'));
+      const e=entriesOf(c.id,'decaisse').find(z=>String(z.lot)===lot);
+      const ent=Object.assign({}, e||{id:'dec:'+c.id+':'+lot, type:'decaisse', chauffeId:c.id, lot, creeLe:nowIso(), pxJours:{}, remJours:{}}, {variete:x.l.variete||'', pg:x.l.pg||'', pDec:Math.round(pd*100)/100, pRem:Math.round(pr*100)/100, dDeb:dd, dFin:df, cire, dDebH:(e&&e.dDeb===dd&&e.dDebH)||'', dFinH:(df&&e&&e.dFin===df&&e.dFinH)||'', jour:c.debut?chDayOfIso(c,dd):null, jourFin:df&&c.debut?chDayOfIso(c,df):null, place:selL.length>1&&!pl&&e?e.place||'':pl, remarque:selL.length>1&&!rq&&e?e.remarque||'':rq, auteurId:S.me.id, auteurNom:S.me.nom});
+      if(!df){ ent.pxJours={}; ent.remJours={}; } delete ent.supprime; out.push(ent); }
+    try{ await saveEntries(out); }catch(e){ return err(L('Enregistrement impossible.','No se pudo guardar.')); }
+    toast(plural(out.length,'lot','lots','lote','lotes')+L(' : décaissage enregistré.',': desencajonado guardado.')); S.dosDec=null; S.dosSel=null; re(); };
+  if($('df-del')){ let armed=false; $('df-del').onclick=async()=>{ if(!armed){ armed=true; $('df-del').textContent=L('Toucher encore pour effacer','Tocar otra vez para borrar'); return; }
+    const out=selL.map(x=>entriesOf(x.c.id,'decaisse').find(z=>String(z.lot)===String(x.l.lot))).filter(Boolean).map(e=>Object.assign({},e,{supprime:true})); await saveEntries(out); toast(L('Décaissage effacé.','Desencajonado borrado.')); S.dosDec=null; S.dosSel=null; re(); }; } }
+
 /* ---------- Premier lancement ---------- */
 function renderWelcome(){
   app.innerHTML=`<header class="top"><div class="title-row"><h1>${APP_NAME}</h1></div></header>
@@ -1244,7 +1375,7 @@ function renderHome(){
   <section class="panel">${installHTML()}${syncbarHTML()}
     ${seedAvail?`<div class="card"><h3>Chauffe 1 de Raphaël</h3><p class="note">Les relevés et observations de la chauffe 1 (Vivero Richter, octobre 2026), prises par Raphaël, avec la liste des 27 lots, sont prêts à être ajoutés.</p><div class="list"><button class="primary" id="seed-me" type="button">Je suis Raphaël : ajouter à mon nom</button><button class="ghost" id="seed-ok" type="button">Ajouter (notes de Raphaël)</button><button class="ghost" id="seed-no" type="button">Pas maintenant</button></div></div>`:''}
     <div class="field"><span class="lab">${esc(L('Dossiers','Carpetas'))}</span>${dossierBarHTML('h-dos',S.dossierSel,true)}${S.dosNew?`<div class="dosrow"><input id="h-dosn" type="text" placeholder="${esc(L('Ex. : Année 1, Saison 2027','Ej.: Año 1, Temporada 2027'))}" value="${esc(S.dosNew===true?'':S.dosNew)}"><button class="primary" type="button" id="h-dosok">${esc(L('Créer','Crear'))}</button><button class="ghost" type="button" id="h-dosx">${esc(L('Annuler','Cancelar'))}</button></div>`:''}${dsel&&!S.dosNew?`<div class="dosrow"><button class="linkbtn" type="button" id="h-dosren">${esc(L('Renommer','Renombrar'))}</button><button class="linkbtn" type="button" id="h-dosdel">${esc(L('Supprimer le dossier','Eliminar la carpeta'))}</button><span class="hint">${esc(L('Les saisons du dossier ne sont pas supprimées.','Las temporadas de la carpeta no se eliminan.'))}</span></div>`:''}</div>
-    <div class="homebtns"><button class="primary" id="h-new" type="button">+ Nouvelle saison${dsel?' · '+esc(dsel.nom):''}</button><button class="primary" id="h-tous" type="button">📋 ${esc(L('Tous les lots','Todos los lotes'))}${dsel?' · '+esc(dsel.nom):''}</button><button class="ghost" id="h-cmp" type="button">${esc(L('Comparer les saisons','Comparar temporadas'))}</button></div>
+    <div class="homebtns"><button class="primary" id="h-new" type="button">+ Nouvelle saison${dsel?' · '+esc(dsel.nom):''}</button>${dsel&&list.length?`<button class="primary" id="h-dopen" type="button">📂 ${esc(L('Ouvrir le dossier','Abrir la carpeta'))} · ${esc(dsel.nom)}</button>`:''}<button class="${dsel&&list.length?'ghost':'primary'}" id="h-tous" type="button">📋 ${esc(L('Tous les lots','Todos los lotes'))}${dsel?' · '+esc(dsel.nom):''}</button><button class="ghost" id="h-cmp" type="button">${esc(L('Comparer les saisons','Comparar temporadas'))}</button></div>
     ${dsel&&list.length?dosSynthHTML(dsel,list):''}
     <div class="list" id="h-list"></div>
     ${fold('hshare', (Sync.active()?'Sauvegarde et partage par fichier':'Partager avec mes collaborateurs'), '', `    <div class="card">
@@ -1278,6 +1409,7 @@ function renderHome(){
   if($('h-dosren')) $('h-dosren').onclick=()=>{ S.dosRen=S.dossierSel; S.dosNew=dossiersAll().find(x=>x.id===S.dossierSel).nom; renderHome(); };
   if($('h-dosdel')){ let c=false; $('h-dosdel').onclick=async()=>{ if(!c){ c=true; $('h-dosdel').textContent=L('Toucher encore pour supprimer le dossier','Tocar otra vez para eliminar la carpeta'); return; } const d=dossiersAll().find(x=>x.id===S.dossierSel); if(d) await removeEntry(d); S.dossierSel='all'; toast(L('Dossier supprimé. Ses saisons sont maintenant « sans dossier ».','Carpeta eliminada. Sus temporadas quedan « sin carpeta ».')); renderHome(); }; }
   $('h-cmp').onclick=()=>go('compare');
+  if($('h-dopen')) $('h-dopen').onclick=()=>{ const c=dosSort(list)[0]; let j=1; if(c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) j=Math.min(t,chGrow(c).duree); } S.dosDet=null; go('chauffe',{chauffeId:c.id, tab:'jour', jour:j}); };
   if($('h-tous')) $('h-tous').onclick=()=>{ S.tousFrom=null; S.tousC='all'; S.tousS='all'; S.tousSel=new Set(); S.tousAct=null; S.tousDet=null; go('tous',{tousKey:dsel?'d:'+dsel.id:'all'}); };
   if($('h-dosreg')) $('h-dosreg').onclick=()=>go('regdos');
   $('h-set').onclick=()=>go('settings');
@@ -1555,21 +1687,26 @@ function renderSettings(){
 /* ---------- Vue d'une chauffe ---------- */
 let dirty=false;
 function renderChauffe(){
-  const ch=chGrow(curChauffe()); const n=lastDay(ch);
+  const ch=chGrow(curChauffe()); const n=lastDay(ch); const grp=dosGroup(ch); const DOS=grp?dossierOf(ch):null;
   if(S.jour>ch.duree) S.jour=ch.duree;
+  if(S.dosDet&&S.dosDet!==S.tab) S.dosDet=null;
   app.innerHTML=`<header class="top">
-    <div class="title-row"><div class="left"><button class="back" id="c-back" type="button" aria-label="Retour aux saisons">‹</button><h1>${esc(ch.nom)}</h1></div><button class="ghost tlhbtn" id="c-tous" type="button" aria-label="${esc(L('Tous les lots','Todos los lotes'))}">📋<span> ${esc(L('Tous les lots','Todos los lotes'))}</span></button><div class="daybadge">J<b>${n||'–'}</b> / ${ch.duree}</div></div>
+    <div class="title-row"><div class="left"><button class="back" id="c-back" type="button" aria-label="Retour aux saisons">‹</button><h1>${esc(DOS?'📂 '+DOS.nom:ch.nom)}</h1></div><button class="ghost tlhbtn" id="c-tous" type="button" aria-label="${esc(L('Tous les lots','Todos los lotes'))}">📋<span> ${esc(L('Tous les lots','Todos los lotes'))}</span></button><div class="daybadge">J<b>${n||'–'}</b> / ${ch.duree}</div></div>
+    ${grp?dosChauffeBar(ch,grp):''}
     <div class="progress" aria-hidden="true"><span style="width:${Math.min(100,n/ch.duree*100)}%"></span></div>
-    <div class="endzone">${ch.debut?'Début le '+esc(dayLabel(ch,1))+' · ':''}${ch.finDe?`fin de chauffe prévue entre J${ch.finDe} et J${ch.finA}`:(ch.dureeLibre?'durée libre : les jours s\'ajoutent au fur et à mesure':'fin de chauffe : pas de date prévue')}</div>
+    <div class="endzone">${grp?'<b>'+esc(ch.nom)+'</b> · ':''}${ch.debut?'Début le '+esc(dayLabel(ch,1))+' · ':''}${ch.finDe?`fin de chauffe prévue entre J${ch.finDe} et J${ch.finA}`:(ch.dureeLibre?'durée libre : les jours s\'ajoutent au fur et à mesure':'fin de chauffe : pas de date prévue')}</div>
     ${syncbarHTML()}
     <nav class="tabs" role="tablist">
       ${[['gref',L('Greffage','Injerto')],['jour',L('Chauffe','Calefacción')],['acc',L('Acclim.','Aclim.')],['dec',L('Décaissage','Desencajonado')],['frigo',L('Frigo','Frigorífico')],['plant',L('Plantation','Plantación')],['bilan',L('Triage','Selección')],['hist',L('Suivi','Seguimiento')],['infos','Infos']].map(([k,l])=>`<button role="tab" type="button" data-tab="${k}" aria-selected="${S.tab===k||(k==='jour'&&S.tab==='lots')}">${l}</button>`).join('')}
-    </nav></header>
+    </nav>${grp&&S.dosDet?`<div class="ddetbar"><span>${esc(L('Détail de ','Detalle de ')+ch.nom)}</span><button class="linkbtn" type="button" id="d-detback">${esc(L('← Tous les lots du dossier','← Todos los lotes de la carpeta'))}</button></div>`:''}</header>
   <section class="panel" id="c-body"></section>`;
-  $('c-back').onclick=()=>go('home'); bindSyncbar();
+  $('c-back').onclick=()=>{ S.dosDet=null; S.dosAcc=null; S.dosDec=null; S.dosSel=null; go('home'); }; bindSyncbar(); if(grp) bindDosChauffeBar(ch);
+  if($('d-detback')) $('d-detback').onclick=()=>{ S.dosDet=null; renderChauffe(); window.scrollTo({top:0}); };
   $('c-tous').onclick=()=>{ S.tousFrom=ch.id; S.tousC='all'; S.tousS='all'; S.tousSel=new Set(); S.tousAct=null; S.tousDet=null; go('tous',{tousKey:'c:'+ch.id}); };
   { const at=app.querySelector('nav.tabs button[aria-selected="true"]'); if(at) at.scrollIntoView({inline:'center',block:'nearest'}); }
-  app.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; renderChauffe(); window.scrollTo({top:0}); });
+  app.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; S.dosDet=null; S.dosAcc=null; S.dosDec=null; S.dosSel=null; renderChauffe(); window.scrollTo({top:0}); });
+  if(grp&&S.tab==='acc'&&S.dosDet!=='acc'){ tabAccDos(ch,$('c-body'),grp); try{ tabNotesMount(ch); }catch(e){} applyScreen(); return; }
+  if(grp&&S.tab==='dec'&&S.dosDet!=='dec'){ tabDecDos(ch,$('c-body'),grp); try{ tabNotesMount(ch); }catch(e){} applyScreen(); return; }
   ({gref:tabGreffage, jour:tabChauffe, hist:tabSuivi, lots:tabChauffe, bilan:tabBilan, acc:(c,b)=>tabAcclim(c,b,'all'), dec:tabDecaissage, frigo:tabFrigo, plant:tabPlantation, infos:tabInfos}[S.tab]||tabChauffe)(ch, $('c-body'));
   try{ miniMount(ch); }catch(e){ console.error(e); }
   try{ tabNotesMount(ch); }catch(e){}
@@ -3638,7 +3775,7 @@ function bindFinCard(ch){
 
 /* ----- Lots qui entrent et sortent d'un lieu d'acclimatation, jour par jour ----- */
 const accMoves=(ch,X)=>accEnts(ch,X,'accmv').sort((a,b)=>(a.ajour-b.ajour)||(a.creeLe||'').localeCompare(b.creeLe||''));
-function accStartSet(ch,X){ const all=(ch.lots||[]).map(l=>String(l.lot)); if(X.lots&&X.lots.length) return new Set(X.lots.map(String)); return new Set(accMoves(ch,X).some(m=>m.action==='in')?[]:all); }
+function accStartSet(ch,X){ const all=(ch.lots||[]).map(l=>String(l.lot)); if((X.lots&&X.lots.length)||X.explicit) return new Set(X.lots.map(String)); return new Set(accMoves(ch,X).some(m=>m.action==='in')?[]:all); }
 /* Palox plantés jusqu'à une date, date où un lot est entièrement planté, palox encore en acclimatation à une date */
 const plPxUpTo=(ch,lot,iso)=>{ const e=plLotOf(ch,lot); if(!e||!iso) return 0; const dd=plDoneDate(ch,lot); if(dd&&dd<=iso) return plPxDispo(ch,lot); const pj=e.pxJours||{}; return Object.keys(pj).filter(d=>d<=iso).reduce((a,d)=>a+(Number(pj[d])||0),0); };
 function plDoneDate(ch,lot){ const e=plLotOf(ch,lot); if(!plFini(e)) return null; const k=Object.keys(e.pxJours||{}).sort(); return e.dateFin||(k.length?k[k.length-1]:'')||e.date||null; }
