@@ -510,6 +510,20 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .seasonw{display:grid;gap:2px}.seasonedit{justify-self:end;font-size:13.5px;margin-right:6px}
 .seasoncard .meta span{white-space:normal}
 .looserow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}.looserow select{max-width:60%}
+.apnav{min-height:38px;min-width:42px;padding:2px 10px;font-size:18px}.apnav[disabled]{opacity:.35}
+.aptodos{display:grid;gap:4px;background:var(--warn-soft);border-radius:10px;padding:8px 10px}
+.apday{display:grid}.apdl{display:grid;grid-template-columns:46px 1fr auto;gap:8px;align-items:baseline;padding:6px 0;border-top:1px solid var(--line);font-size:14.5px}.apdl:first-child{border-top:0}.apdl .mono{color:var(--muted);font-size:13px}.apdl small{color:var(--muted);font-size:12px}
+.apquick{display:flex;gap:8px;align-items:flex-end}.apquick textarea{flex:1;min-height:48px}.apquick button{min-height:48px}
+.aptw{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px;max-height:70vh}
+.aptab{border-collapse:separate;border-spacing:0;font-size:13.5px;min-width:760px;width:100%}
+.aptab th,.aptab td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+.aptab thead th{position:sticky;top:0;background:var(--sunk);z-index:2;font-size:12.5px;color:var(--muted)}
+.aptab tbody th{position:sticky;left:0;background:var(--surface);z-index:1;min-width:92px;border-right:1px solid var(--line)}
+.aptab thead th:first-child{left:0;z-index:3}
+.aptab tbody th b{font-size:16px}.aptab tbody th small{display:block;color:var(--muted);font-weight:400;font-size:11.5px;white-space:normal;max-width:120px}
+.aptab tbody tr{cursor:pointer}.aptab tbody tr:active td,.aptab tbody tr:active th{background:var(--accent-soft)}
+.aptab .apnote{white-space:normal;min-width:160px;max-width:240px;color:var(--muted)}
+.aptab .tlch{font-style:normal}
 </style>
 </head>
 <body>
@@ -530,7 +544,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.72.0';
+const APP_VERSION = '2.73.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1370,45 +1384,80 @@ function stageBarHTML(items){ const n=items.length; if(!n) return ''; const c={}
   return `<div class="apbar">${AP_ST().filter(([k])=>c[k]).map(([k,col])=>`<span style="flex:${c[k]};background:${col}" title="${esc(tlStName(k))}"></span>`).join('')}</div>
     <div class="aplegend">${AP_ST().filter(([k])=>c[k]).map(([k,col])=>`<span><i style="background:${col}"></i>${esc(tlStName(k))} <b>${c[k]}</b></span>`).join('')}</div>`; }
 function apItems(grp){ return [].concat(...grp.map(c=>(c.lots||[]).map(l=>({c,l,st:lotStage(c,l)})))); }
-function tabApercu(ch, body){ const grp=dosGroup(ch)||[ch]; const T=todayIso(); const items=apItems(grp); const N=items.length; const multi=grp.length>1;
-  const cnt=f=>items.filter(f).length; const rank={chauffe:1,sorti:2,decaisse:3,enplant:4,plante:5,trie:6};
-  // greffage
-  const gref=items.filter(x=>grefOf(x.c.id,x.l.lot)); const gd=gref.map(x=>grefOf(x.c.id,x.l.lot).date).filter(Boolean).sort();
-  // chauffe
-  const chLines=grp.map(c=>{ chGrow(c); const n=chTodayJ(c)||lastDay(c); const st=!c.debut?L('pas commencée','no empezada'):c.sortie?L('sortie le ','salida el ')+isoFr(c.sortie).slice(0,5):L('en cours · J','en curso · J')+(n||'–')+' / '+c.duree; const enC=items.filter(x=>x.c.id===c.id&&x.st==='chauffe').length; return {c, t:st, enC, ok:!!c.sortie}; });
-  // acclimatation
-  let accN=0, accPx=0; try{ dosPlaces(grp).forEach(P=>placePresent(P,T).forEach(x=>{ accN++; accPx+=accPxFor(x.c,x.X,x.l.lot,T)||0; })); }catch(e){}
-  // décaissage
-  const decN=cnt(x=>decDone(x.c,x.l.lot));
-  // frigo
-  const frigoNow=[].concat(...grp.map(c=>entriesOf(c.id,'frigo').filter(e=>e.dIn&&e.dIn.slice(0,10)<=T&&(!e.dOut||e.dOut.slice(0,10)>T)))).length;
-  // plantation
-  const plF=cnt(x=>x.st==='plante'||x.st==='trie'), plC=cnt(x=>x.st==='enplant'); let reste=0; items.forEach(x=>{ if(rank[x.st]>=2&&rank[x.st]<=4){ try{ reste+=plPxReste(x.c,x.l.lot)||0; }catch(e){} } });
-  // triage
-  const tri=items.filter(x=>bilanOf(x.c.id,x.l.lot)); let rate=null; try{ const a=aggRate(tri.map(x=>Object.assign({},x.l,{b:bilanOf(x.c.id,x.l.lot)}))); rate=a.rate; }catch(e){}
-  const step=(tab,ico,title,val,sub,n,tot,warn)=>`<button type="button" class="apstep${warn?' warn':''}" data-tab="${tab}"><span class="apico">${ico}</span><span class="aptxt"><b>${esc(title)}</b><small>${sub}</small>${tot?`<span class="approg"><span style="width:${Math.min(100,Math.round(n/tot*100))}%"></span></span>`:''}</span><span class="apval">${esc(val)}</span><span class="apgo">›</span></button>`;
-  // à faire
+/* ===================== APERÇU = AUJOURD'HUI + TABLEAU DES LOTS ===================== */
+const locIso=d=>{ const x=new Date(d); if(isNaN(x)) return ''; return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+function entryText(e, grp){ const c=grp.find(x=>x.id===e.chauffeId); const cn=grp.length>1&&c?' ('+ppShort(c.nom)+')':''; const lot=e.lot!=null?L('lot ','lote ')+e.lot:'';
+  switch(e.type){
+    case 'releve': return '🌡️ '+L('Relevé chauffe J','Lectura calefacción J')+e.jour+(e.heure?' · '+e.heure:'')+cn;
+    case 'obs': return '👁️ '+L('Observation chauffe J','Observación calefacción J')+e.jour+cn+(e.texte?' : '+e.texte:'');
+    case 'note': return '📝 '+(e.texte||L('Note','Nota'))+cn;
+    case 'tabnote': return '📝 '+(e.texte||L('Note','Nota'))+cn;
+    case 'lotnote': return '📝 '+((e.lots||[]).length?L('Lots ','Lotes ')+(e.lots||[]).join(', ')+' : ':'')+e.texte+cn;
+    case 'greffage': return '✂️ '+L('Greffage ','Injerto ')+lot+cn;
+    case 'sortie': return '🔥 '+L('Sorti de chauffe : ','Salido de calefacción: ')+lot+cn;
+    case 'decaisse': return '📦 '+L('Décaissé : ','Desencajonado: ')+lot+(e.pDec!=null?' · '+fmtN(e.pDec)+'→'+fmtN(e.pRem)+' px':'')+cn;
+    case 'accmv': { const X=c&&accList(c).find(Y=>Y.id===(e.accId||'a1')); return '🌤️ '+lot+(e.action==='in'?L(' entré : ',' entró: '):L(' sorti : ',' salió: '))+(X?accName(c,X):'')+cn; }
+    case 'accrel': return '🌡️ '+L('Relevé acclimatation','Lectura aclimatación')+cn;
+    case 'accobs': case 'accnote': return '🌤️ '+(e.texte||L('Note acclimatation','Nota aclimatación'))+cn;
+    case 'reprise': return '🌱 '+L('Reprise ','Prendimiento ')+lot+(e.pct!=null?' : '+e.pct+' %':'')+cn;
+    case 'frigo': return '❄️ '+L('Frigo palox ','Frigorífico palox ')+(e.palox||'')+(e.dOut?L(' sorti',' salido'):L(' entré',' entrado'))+cn;
+    case 'frigot': return '❄️ '+L('Relevé frigo','Lectura frigorífico')+(e.t!=null?' '+e.t+' °C':'')+cn;
+    case 'plantlot': return '🌱 '+L('Plantation ','Plantación ')+lot+(plFini(e)?L(' (fini)',' (terminado)'):'')+cn;
+    case 'plpass': return '🌱 '+L('Passage ','Pasada ')+e.n+' · '+e.parc;
+    case 'plcharge': return '🚜 '+L('Remorque : ','Remolque: ')+(e.lots||[]).map(x=>x.lot).join(', ');
+    case 'plantop': case 'phyto': return '💧 '+(e.kind||e.produit||L('Intervention','Intervención'))+(e.remarque?' : '+e.remarque:'')+cn;
+    case 'bilan': return '🔍 '+L('Triage ','Selección ')+lot+(bilanRate(e)!=null?' : '+pct(bilanRate(e)):'')+cn;
+    case 'chstep': case 'plantstep': return '✔️ '+(e.titre||e.label||L('Étape','Etapa'))+cn;
+    default: return null; } }
+function tabApercu(ch, body){ const grp=dosGroup(ch)||[ch]; const ids=new Set(grp.map(c=>c.id)); const T=todayIso(); const D=S.apD||T; const multi=grp.length>1;
+  const items=apItems(grp); const N=items.length;
+  // ---- Aujourd'hui ----
+  const day=S.entrees.filter(e=>!e.supprime&&ids.has(e.chauffeId)&&e.source!=='capteur'&&locIso(e.majLe||e.creeLe)===D).sort((a,b)=>String(b.majLe||b.creeLe).localeCompare(String(a.majLe||a.creeLe)));
+  const lines=[]; const seen=new Set(); day.forEach(e=>{ const t=entryText(e,grp); if(!t) return; const k=t+'|'+(e.auteurNom||''); if(seen.has(k)) return; seen.add(k); lines.push({t, who:e.auteurNom||'', h:new Date(e.majLe||e.creeLe)}); });
   const todo=[];
-  grp.forEach(c=>{ const r=relevesToday(c); if(r===0) todo.push({t:L('Relevé du jour à faire : ','Lectura del día por hacer: ')+c.nom+' (J'+chTodayJ(c)+')', tab:'jour', cid:c.id}); });
-  try{ const where=new Set(); dosPlaces(grp).forEach(P=>placePresent(P,T).forEach(x=>where.add(x.c.id+'|'+x.l.lot))); const nw=items.filter(x=>['sorti','decaisse','enplant'].includes(x.st)&&!where.has(x.c.id+'|'+x.l.lot)); if(nw.length&&dosPlaces(grp).length) todo.push({t:plural(nw.length,'lot sorti','lots sortis','lote salido','lotes salidos')+L(" dans aucun endroit d'acclimatation"," en ningún lugar de aclimatación"), tab:'acc'}); }catch(e){}
+  if(D===T){ grp.forEach(c=>{ const r=relevesToday(c); if(r===0) todo.push({t:L('Relevé du jour : ','Lectura del día: ')+c.nom+' (J'+chTodayJ(c)+')', tab:'jour', cid:c.id}); });
+    try{ const where=new Set(); dosPlaces(grp).forEach(P=>placePresent(P,T).forEach(x=>where.add(x.c.id+'|'+x.l.lot))); const nw=items.filter(x=>['sorti','decaisse','enplant'].includes(x.st)&&!where.has(x.c.id+'|'+x.l.lot)); if(nw.length&&dosPlaces(grp).length) todo.push({t:plural(nw.length,'lot sorti','lots sortis','lote salido','lotes salidos')+L(" dans aucun endroit d'acclimatation"," en ningún lugar de aclimatación")+' : '+nw.map(x=>x.l.lot).join(', '), tab:'acc'}); }catch(e){} }
+  // ---- Tableau des lots ----
+  const where={}; try{ dosPlaces(grp).forEach(P=>placePresent(P,T).forEach(x=>{ (where[x.c.id+'|'+x.l.lot]=where[x.c.id+'|'+x.l.lot]||[]).push(P.nom); })); }catch(e){}
+  const q=(S.apQ||'').trim().toLowerCase(); const fc=S.apC||'all';
+  const rows=items.filter(x=>(fc==='all'||x.c.id===fc)&&(!q||(/^\d+$/.test(q)?String(x.l.lot).startsWith(q):(String(x.l.lot).toLowerCase().includes(q)||String(x.l.variete||'').toLowerCase().includes(q)||String(x.l.pg||'').toLowerCase().includes(q)))))
+    .sort((a,b)=>String(a.l.lot).localeCompare(String(b.l.lot),undefined,{numeric:true})||String(a.c.nom).localeCompare(String(b.c.nom)));
+  const d5=iso=>iso?isoFr(iso).slice(0,5):'';
+  const row=x=>{ const c=x.c, lot=String(x.l.lot); const g=grefOf(c.id,lot); const so=sortieOf(c.id,lot); const soD=so?(so.date||(c.debut&&so.jour?dIsoAdd(c.debut,so.jour-1):'')):(c.sortie||'');
+    const de=decDone(c,lot); const pe=plLotOf(c,lot); const bi=bilanOf(c.id,lot); const nt=lotNotes(c,lot)[0]; const r=bi?bilanRate(bi):null;
+    return {x, cells:[ g&&g.date?d5(g.date):'', soD?d5(soD):(c.debut&&x.st==='chauffe'?'🔥':''), de?d5(de.dDeb)+' · '+fmtN(de.pDec)+'→'+fmtN(de.pRem):'', (where[c.id+'|'+lot]||[]).join(', '), pe?d5(pe.date)+(pe.dateFin?'–'+d5(pe.dateFin):'')+(plFini(pe)?' ✓':' …'):'', r!=null?pct(r):'', nt?nt.texte:'' ]}; };
+  const R=rows.map(row);
+  const heads=[L('Greffé','Injertado'),L('Sorti','Salido'),L('Décaissé (px)','Desencaj. (px)'),L('Acclim.','Aclim.'),L('Planté','Plantado'),L('Trié','Selec.'),L('Dernière note','Última nota')];
   body.innerHTML=`
-    <div class="card" style="gap:8px"><div class="hhead"><h3 style="margin:0">${esc(L('Où en sont les ','Dónde están los ')+N+L(' lots',' lotes'))}</h3>${multi?`<span class="small">${esc(grp.map(c=>ppShort(c.nom)).join(' · '))}</span>`:''}</div>${N?stageBarHTML(items):`<p class="hint" style="margin:0">${esc(L('Ajoute les lots dans Infos.','Agrega los lotes en Infos.'))}</p>`}</div>
-    ${todo.length?`<div class="card" style="gap:6px;background:var(--warn-soft)"><b>${esc(L('À faire','Por hacer'))}</b>${todo.map(t=>`<button type="button" class="linkbtn aptodo" data-tab="${t.tab}"${t.cid?` data-cid="${esc(t.cid)}"`:''}>→ ${esc(t.t)}</button>`).join('')}</div>`:''}
-    <div class="apsteps">
-      ${step('gref','✂️',L('Greffage','Injerto'), gref.length+' / '+N, esc(gd.length?L('du ','del ')+isoFr(gd[0]).slice(0,5)+(gd[gd.length-1]!==gd[0]?L(' au ',' al ')+isoFr(gd[gd.length-1]).slice(0,5):''):L('dates à noter','fechas por anotar')), gref.length, N)}
-      ${step('jour','🔥',L('Chauffe','Calefacción'), cnt(x=>x.st==='chauffe')+L(' en chauffe',' en calef.'), chLines.map(x=>esc((multi?x.c.nom+' : ':'')+x.t)).join('<br>'), N-cnt(x=>x.st==='chauffe'), N)}
-      ${step('acc','🌤️',L('Acclimatation','Aclimatación'), accN+' '+L('lots','lotes'), esc(accN?fmtN(Math.round(accPx*100)/100)+L(" palox aujourd'hui"," palox hoy"):L('aucun lot aujourd\'hui','ningún lote hoy')))}
-      ${step('dec','📦',L('Décaissage','Desencajonado'), decN+' / '+N, esc(L('lots décaissés','lotes desencajonados')), decN, N)}
-      ${step('frigo','❄️',L('Frigo','Frigorífico'), frigoNow+' palox', esc(L('au frigo aujourd\'hui','en el frigorífico hoy')))}
-      ${step('plant','🌱',L('Plantation','Plantación'), plF+' / '+N, esc((plC?plC+L(' en cours · ',' en curso · '):'')+(reste?fmtN(Math.round(reste*100)/100)+L(' palox à planter',' palox por plantar'):L('lots entièrement plantés','lotes completamente plantados'))), plF, N)}
-      ${step('bilan','🔍',L('Triage','Selección'), tri.length+' / '+N, esc(rate!=null?L('réussite générale ','éxito general ')+pct(rate):L('lots triés','lotes seleccionados')), tri.length, N)}
-      ${step('hist','🗺️',L('Suivi et plan','Seguimiento y plano'), '', esc(L('toutes les étapes, plan de la parcelle, registre','todas las etapas, plano de la parcela, registro')))}
+    <div class="card" style="gap:8px">
+      <div class="hhead"><h3 style="margin:0">${esc(D===T?L("Aujourd'hui","Hoy"):dayLabel({debut:D},1))}</h3><div class="row" style="gap:4px;flex-wrap:nowrap"><button class="ghost apnav" type="button" data-d="-1" aria-label="${esc(L('Jour précédent','Día anterior'))}">‹</button>${D!==T?`<button class="ghost apnav" type="button" data-d="0">${esc(L("Aujourd'hui","Hoy"))}</button>`:''}<button class="ghost apnav" type="button" data-d="1"${D>=T?' disabled':''} aria-label="${esc(L('Jour suivant','Día siguiente'))}">›</button></div></div>
+      ${todo.length?`<div class="aptodos">${todo.map(t=>`<button type="button" class="linkbtn aptodo" data-tab="${t.tab}"${t.cid?` data-cid="${esc(t.cid)}"`:''}>⚠️ ${esc(t.t)}</button>`).join('')}</div>`:''}
+      ${lines.length?`<div class="apday">${lines.slice(0,S.apAll?999:6).map(l=>`<div class="apdl"><span class="mono">${String(l.h.getHours()).padStart(2,'0')}:${String(l.h.getMinutes()).padStart(2,'0')}</span><span>${esc(l.t)}</span><small>${esc(l.who)}</small></div>`).join('')}</div>${lines.length>6?`<button class="linkbtn" type="button" id="ap-all">${esc(S.apAll?L('Moins','Menos'):L('Voir les ','Ver las ')+(lines.length-6)+L(' autres',' otras'))}</button>`:''}`:`<p class="hint" style="margin:0">${esc(D===T?L("Rien de noté aujourd'hui pour l'instant.","Nada anotado hoy por ahora."):L('Rien de noté ce jour-là.','Nada anotado ese día.'))}</p>`}
+      ${D===T?`<div class="apquick"><textarea id="ap-note" rows="2" placeholder="${esc(L('Note rapide pour la saison (météo, problème, consigne…)','Nota rápida para la temporada (clima, problema, consigna…)'))}"></textarea><button class="primary" type="button" id="ap-noteok">${esc(L('Noter','Anotar'))}</button></div>`:''}
     </div>
-    <button class="ghost" type="button" id="ap-tous">📋 ${esc(L('Tous les lots (sélection et notes)','Todos los lotes (selección y notas)'))}</button>
+    <div class="card" style="gap:8px">
+      <div class="hhead"><h3 style="margin:0">${esc(L('Tableau des lots','Tabla de lotes'))}</h3><span class="small">${esc(R.length+' / '+N)}</span></div>
+      ${N?stageBarHTML(items).replace('<div class="aplegend">','<div class="aplegend sm">'):''}
+      <div class="row" style="gap:6px;align-items:center"><input id="ap-q" type="search" placeholder="${esc(L('Chercher un lot, une variété…','Buscar un lote, una variedad…'))}" value="${esc(S.apQ||'')}" style="flex:1;min-width:140px">${multi?`<select id="ap-c"><option value="all">${esc(L('Toutes les chauffes','Todas las calefacciones'))}</option>${grp.map(c=>`<option value="${esc(c.id)}"${fc===c.id?' selected':''}>${esc(c.nom)}</option>`).join('')}</select>`:''}</div>
+      <div class="aptw"><table class="aptab"><thead><tr><th>${esc(L('Lot','Lote'))}</th>${heads.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${R.map(r=>`<tr data-k="${esc(r.x.c.id+'|'+r.x.l.lot)}"><th><b>${esc(r.x.l.lot)}</b>${multi?` <i class="tlch" style="background:${tlCol(grp,r.x.c)}">${esc(ppShort(r.x.c.nom))}</i>`:''}<small>${esc([r.x.l.variete,r.x.l.pg].filter(Boolean).join(' / '))}</small></th>${r.cells.map((v,i)=>`<td${i===6?' class="apnote"':''}>${esc(v)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="8" class="hint">${esc(L('Aucun lot.','Ningún lote.'))}</td></tr>`}</tbody></table></div>
+      <p class="hint" style="margin:0">${esc(L('Touche une ligne pour l\'historique du lot (et supprimer une étape).','Toca una fila para el historial del lote (y eliminar una etapa).'))}</p>
+      <div class="row"><button class="ghost" type="button" id="ap-xls">📊 ${esc(L('Fichier Excel du tableau','Archivo Excel de la tabla'))}</button><button class="ghost" type="button" id="ap-tous">📋 ${esc(L('Sélection et notes','Selección y notas'))}</button></div><div class="status" id="ap-st"></div>
+    </div>
     ${(()=>{ const d=dossierOf(ch); if(!d) return ''; try{ return fold('apsynth', esc(L('Synthèse et registre de la saison','Síntesis y registro de la temporada')), '', dosSynthHTML(d,dosSort(grp))); }catch(e){ return ''; } })()}`;
-  if($('h-dosreg')) $('h-dosreg').onclick=()=>{ S.dossierSel=ch.dossier; go('regdos'); };
-  body.querySelectorAll('.apstep,.aptodo').forEach(b=>b.onclick=()=>{ if(b.dataset.cid&&b.dataset.cid!==ch.id){ S.chauffeId=b.dataset.cid; } if(b.dataset.tab==='jour'){ const c=curChauffe(); if(c&&c.debut){ const t=chDayOfIso(c,todayIso()); if(t>=1) S.jour=Math.min(t,chGrow(c).duree); } } S.tab=b.dataset.tab; renderChauffe(); window.scrollTo({top:0}); });
+  const re=()=>{ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); };
+  if($('ap-all')) $('ap-all').onclick=()=>{ S.apAll=!S.apAll; re(); };
+  body.querySelectorAll('.apnav').forEach(b=>b.onclick=()=>{ const v=Number(b.dataset.d); S.apD=v===0?T:dIsoAdd(D,v); if(S.apD>T) S.apD=T; re(); });
+  body.querySelectorAll('.aptodo').forEach(b=>b.onclick=()=>{ if(b.dataset.cid) S.chauffeId=b.dataset.cid; if(b.dataset.tab==='jour'){ const c=curChauffe(); if(c&&c.debut){ const t=chDayOfIso(c,T); if(t>=1) S.jour=Math.min(t,chGrow(c).duree); } } S.tab=b.dataset.tab; renderChauffe(); window.scrollTo({top:0}); });
+  if($('ap-noteok')) $('ap-noteok').onclick=async()=>{ const t=$('ap-note').value.trim(); if(!t){ $('ap-note').focus(); return; } await saveEntry({id:'ln-'+uid(), type:'lotnote', chauffeId:ch.id, lots:[], date:T, texte:t, auteurId:S.me.id, auteurNom:S.me.nom, creeLe:nowIso()}); toast(L('Note ajoutée.','Nota agregada.')); re(); };
+  let qt=null; $('ap-q').oninput=()=>{ clearTimeout(qt); qt=setTimeout(()=>{ S.apQ=$('ap-q').value; const pos=$('ap-q').selectionStart; re(); const i=$('ap-q'); if(i){ i.focus(); try{ i.setSelectionRange(pos,pos); }catch(e){} } },350); };
+  if($('ap-c')) $('ap-c').onchange=()=>{ S.apC=$('ap-c').value; re(); };
+  body.querySelectorAll('.aptab tbody tr[data-k]').forEach(tr=>tr.onclick=()=>{ S.tousFrom=ch.id; S.tousC='all'; S.tousS='all'; S.tousSel=new Set(); S.tousAct=null; S.tousDet=tr.dataset.k; go('tous',{tousKey:'c:'+ch.id}); });
   $('ap-tous').onclick=()=>{ S.tousFrom=ch.id; S.tousC='all'; S.tousS='all'; S.tousSel=new Set(); S.tousAct=null; S.tousDet=null; go('tous',{tousKey:'c:'+ch.id}); };
+  $('ap-xls').onclick=()=>{ const cell=v=>{ v=String(v==null?'':v); return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+    const head=[L('Lot','Lote'),L('Chauffe','Calefacción'),L('Variété','Variedad'),L('Porte-greffe','Portainjerto'),L('Palox','Palox'),L('Étape','Etapa')].concat(heads);
+    const lines2=[head.map(cell).join(';')].concat(R.map(r=>[r.x.l.lot,r.x.c.nom,r.x.l.variete||'',r.x.l.pg||'',r.x.l.palox||'',tlStName(r.x.st)].concat(r.cells).map(cell).join(';')));
+    const d=dossierOf(ch); shareFile(new File(['﻿'+lines2.join('\r\n')], slug(L('lots-','lotes-')+(d?d.nom:ch.nom))+'.csv', {type:'text/csv'}), $('ap-st'), L('Fichier prêt : il s\'ouvre dans Excel ou Numbers.','Archivo listo: se abre en Excel o Numbers.')); };
+  if($('h-dosreg')) $('h-dosreg').onclick=()=>{ S.dossierSel=ch.dossier; go('regdos'); };
 }
 
 /* ---------- Premier lancement ---------- */
