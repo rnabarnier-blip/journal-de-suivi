@@ -526,6 +526,8 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .aptab .tlch{font-style:normal}
 .ppnav{display:flex;align-items:center;justify-content:space-between;gap:6px}.ppnav button{min-height:40px;padding:4px 10px;font-size:14px}.ppnav button[disabled]{visibility:hidden}
 .ppbedit{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:8px}#ppb-add{max-width:100%}
+.fracc{font-size:13px;font-weight:600;color:var(--ok);margin-top:2px}
+.dchip small{font-size:11.5px;color:var(--muted);margin-left:2px}
 </style>
 </head>
 <body>
@@ -546,7 +548,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.74.0';
+const APP_VERSION = '2.75.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1293,7 +1295,7 @@ function tabAccDos(ch, body, grp){ const T=todayIso(); const places=dosPlaces(gr
         <div class="row"><button class="primary" type="button" id="da-ok">${esc((mode.m==='in'?L('Entrer ','Entrar ')+'':L('Sortir ','Sacar '))+plural(sel.size,'lot','lots','lote','lotes'))}</button><button class="ghost" type="button" id="da-x">${esc(L('Annuler','Cancelar'))}</button></div><div class="status" id="da-st"></div></div>`; }
     return `<div class="card dplace" style="gap:8px"><div class="hhead"><h3 style="margin:0">${esc(P.nom)}</h3><span class="small">${esc(P.phase==='apres'?L('après décaissage','después del desencajonado'):L('avant décaissage','antes del desencajonado'))}</span></div>
       <div class="hint">${esc(plural(pres.length,'lot','lots','lote','lotes')+(px?' · '+fmtN(Math.round(px*100)/100)+' palox':'')+L(" aujourd'hui"," hoy"))}</div>
-      ${pres.length?`<div class="dchips">${pres.map(x=>`<span class="dchip"><b>${esc(x.l.lot)}</b>${grp.length>1?`<i style="background:${tlCol(grp,x.c)}">${esc(ppShort(x.c.nom))}</i>`:''}</span>`).join('')}</div>`:''}
+      ${pres.length?`<div class="dchips">${pres.map(x=>{ const a=accDays(x.c,x.l.lot,T); const fr=frigoInAt(x.c,x.l.lot,T); return `<span class="dchip"><b>${esc(x.l.lot)}</b>${grp.length>1?`<i style="background:${tlCol(grp,x.c)}">${esc(ppShort(x.c.nom))}</i>`:''}${a?`<small>${esc(accDaysTxt(a))}</small>`:''}${fr?`<small>❄️${fr}</small>`:''}</span>`; }).join('')}</div>`:''}
       ${open?pick:`<div class="row"><button class="primary" type="button" data-pin="${esc(P.k)}">${esc(L('+ Entrer des lots','+ Entrar lotes'))}</button>${pres.length?`<button class="ghost" type="button" data-pout="${esc(P.k)}">${esc(L('− Sortir des lots','− Sacar lotes'))}</button>`:''}</div>`}</div>`; };
   const nowhere=all.filter(x=>!where[x.k]&&['sorti','decaisse','enplant'].includes(lotStage(x.c,x.l)));
   body.innerHTML=`<p class="note">${esc(L("Les endroits d'acclimatation de toutes les chauffes du dossier. Touche « Entrer » ou « Sortir », puis les lots. Les lots décaissés (avant décaissage) et les lots plantés partent tout seuls.","Los lugares de aclimatación de todas las calefacciones de la carpeta. Toca « Entrar » o « Sacar », luego los lotes. Los lotes desencajonados (antes del desencajonado) y los plantados salen solos."))}</p>
@@ -1427,9 +1429,9 @@ function tabApercu(ch, body){ const grp=dosGroup(ch)||[ch]; const ids=new Set(gr
   const d5=iso=>iso?isoFr(iso).slice(0,5):'';
   const row=x=>{ const c=x.c, lot=String(x.l.lot); const g=grefOf(c.id,lot); const so=sortieOf(c.id,lot); const soD=so?(so.date||(c.debut&&so.jour?dIsoAdd(c.debut,so.jour-1):'')):(c.sortie||'');
     const de=decDone(c,lot); const pe=plLotOf(c,lot); const bi=bilanOf(c.id,lot); const nt=lotNotes(c,lot)[0]; const r=bi?bilanRate(bi):null;
-    return {x, cells:[ g&&g.date?d5(g.date):'', soD?d5(soD):(c.debut&&x.st==='chauffe'?'🔥':''), de?d5(de.dDeb)+' · '+fmtN(de.pDec)+'→'+fmtN(de.pRem):'', (where[c.id+'|'+lot]||[]).join(', '), pe?d5(pe.date)+(pe.dateFin?'–'+d5(pe.dateFin):'')+(plFini(pe)?' ✓':' …'):'', r!=null?pct(r):'', nt?nt.texte:'' ]}; };
+    return {x, cells:[ g&&g.date?d5(g.date):'', soD?d5(soD):(c.debut&&x.st==='chauffe'?'🔥':''), de?d5(de.dDeb)+' · '+fmtN(de.pDec)+'→'+fmtN(de.pRem):'', [(where[c.id+'|'+lot]||[]).join(', '), accDaysTxt(accDays(c,lot,T))].filter(Boolean).join(' · '), pe?d5(pe.date)+(pe.dateFin?'–'+d5(pe.dateFin):'')+(plFini(pe)?' ✓':' …'):'', r!=null?pct(r):'', nt?nt.texte:'' ]}; };
   const R=rows.map(row);
-  const heads=[L('Greffé','Injertado'),L('Sorti','Salido'),L('Décaissé (px)','Desencaj. (px)'),L('Acclim.','Aclim.'),L('Planté','Plantado'),L('Trié','Selec.'),L('Dernière note','Última nota')];
+  const heads=[L('Greffé','Injertado'),L('Sorti','Salido'),L('Décaissé (px)','Desencaj. (px)'),L('Acclimatation','Aclimatación'),L('Planté','Plantado'),L('Trié','Selec.'),L('Dernière note','Última nota')];
   body.innerHTML=`
     <div class="card" style="gap:8px">
       <div class="hhead"><h3 style="margin:0">${esc(D===T?L("Aujourd'hui","Hoy"):dayLabel({debut:D},1))}</h3><div class="row" style="gap:4px;flex-wrap:nowrap"><button class="ghost apnav" type="button" data-d="-1" aria-label="${esc(L('Jour précédent','Día anterior'))}">‹</button>${D!==T?`<button class="ghost apnav" type="button" data-d="0">${esc(L("Aujourd'hui","Hoy"))}</button>`:''}<button class="ghost apnav" type="button" data-d="1"${D>=T?' disabled':''} aria-label="${esc(L('Jour suivant','Día siguiente'))}">›</button></div></div>
@@ -1461,6 +1463,33 @@ function tabApercu(ch, body){ const grp=dosGroup(ch)||[ch]; const ids=new Set(gr
     const d=dossierOf(ch); shareFile(new File(['﻿'+lines2.join('\r\n')], slug(L('lots-','lotes-')+(d?d.nom:ch.nom))+'.csv', {type:'text/csv'}), $('ap-st'), L('Fichier prêt : il s\'ouvre dans Excel ou Numbers.','Archivo listo: se abre en Excel o Numbers.')); };
   if($('h-dosreg')) $('h-dosreg').onclick=()=>{ S.dossierSel=ch.dossier; go('regdos'); };
 }
+
+/* ===== Temps d'acclimatation =====
+   Début = dernière entrée dans un endroit d'acclimatation, ou dernière sortie de frigo (les plants sortis du frigo s'acclimatent).
+   Fin = début de plantation du lot, sinon aujourd'hui. */
+function accSince(c,lot,T){ T=T||todayIso(); lot=String(lot); const ds=[];
+  entriesOf(c.id,'frigo').forEach(e=>{ if(String(e.lot)===lot&&e.dOut&&e.dOut.slice(0,10)<=T) ds.push(e.dOut.slice(0,10)); });
+  accList(c).forEach(X=>{ if(!X.debut) return; accMoves(c,X).forEach(m=>{ if(m.action==='in'&&String(m.lot)===lot){ const d=dIsoAdd(X.debut,m.ajour-1); if(d<=T) ds.push(d); } }); if(X.debut<=T&&accStartSet(c,X).has(lot)) ds.push(X.debut); });
+  return ds.length?ds.sort().pop():null; }
+function accDays(c,lot,T){ T=T||todayIso(); const st=accSince(c,lot,T); if(!st) return null; const pe=plLotOf(c,lot); const end=pe&&pe.date&&pe.date>=st?pe.date:T; return {start:st, days:Math.max(0,dDayIdx(st,end)-1), done:!!(pe&&pe.date&&pe.date>=st)}; }
+const accDaysTxt=a=>a?(a.done?L('acclimaté ','aclimatado ')+a.days+L(' j',' d'):a.days+L(' j',' d')):'';
+/* Entrer des lots d'une saison dans un endroit (même logique que l'onglet Acclim. du dossier) */
+async function accEnterLots(grp, P, keys, D){ const tpl=P.items[0].X; const moves=[]; const touched=new Set(); const places=dosPlaces(grp);
+  for(const k of keys){ const cid=k.slice(0,k.indexOf('|')), lot=k.slice(k.indexOf('|')+1); let c=liveChauffes().find(x=>x.id===cid); if(!c) continue;
+    let X=accList(c).find(Y=>accKey(Y)===P.k);
+    if(X&&X.debut&&X.debut<=D&&accPresent(c,X,dDayIdx(X.debut,D)).has(lot)) continue;   // déjà dedans
+    if(!X){ X=accNorm(Object.assign({}, tpl, {id:'a'+uid().slice(-6), debut:D, fin:'', lots:[], explicit:true})); await saveChauffe(Object.assign({},c,{acclims:accList(c).concat([X])})); c=liveChauffes().find(x=>x.id===cid); }
+    else if(!touched.has(c.id+':'+X.id)&&!(X.lots&&X.lots.length)&&!X.explicit&&!accMoves(c,X).some(z=>z.action==='in')){ const fixed=Object.assign({},X,{lots:[...accStartSet(c,X)], explicit:true}); await saveChauffe(Object.assign({},c,{acclims:accList(c).map(Y=>Y.id===X.id?fixed:Y)})); c=liveChauffes().find(x=>x.id===cid); X=fixed; }
+    if(X.debut&&D<X.debut){ await saveChauffe(Object.assign({},c,{acclims:accList(c).map(Y=>Y.id===X.id?Object.assign({},Y,{debut:D}):Y)})); const sh=dDayIdx(D,X.debut)-1; const old=S.entrees.filter(e=>!e.supprime&&e.chauffeId===c.id&&(e.accId||'a1')===X.id&&typeof e.ajour==='number').map(e=>Object.assign({},e,{ajour:e.ajour+sh})); if(old.length) await saveEntries(old); X=Object.assign({},X,{debut:D}); }
+    touched.add(c.id+':'+X.id); moves.push({id:uid(), type:'accmv', chauffeId:c.id, accId:X.id, ajour:X.debut?dDayIdx(X.debut,D):1, lot, action:'in', auteurId:S.me.id, auteurNom:S.me.nom, creeLe:nowIso()});
+    places.filter(Q=>Q.k!==P.k).forEach(Q=>Q.items.forEach(({c:c2,X:Y})=>{ if(c2.id!==cid||!Y.debut) return; const A=dDayIdx(Y.debut,D); if(A<1) return; if(accPresent(c2,Y,A).has(String(lot))) moves.push({id:uid(), type:'accmv', chauffeId:cid, accId:Y.id, ajour:A, lot, action:'out', auteurId:S.me.id, auteurNom:S.me.nom, creeLe:nowIso()}); })); }
+  if(moves.length) await saveEntries(moves); return moves.filter(m=>m.action==='in').length; }
+/* Choix de l'endroit d'acclimatation à la sortie du frigo */
+function frAccSelHTML(ch,id,lots){ const grp=dosGroup(ch)||[ch]; let places=[]; try{ places=dosPlaces(grp); }catch(e){} const T=todayIso();
+  const cur=(()=>{ for(const P of places){ if(lots.some(l=>placePresent(P,T).some(x=>x.c.id===ch.id&&String(x.l.lot)===String(l)))) return P.k; } const ap=places.find(P=>P.phase==='apres'); return ap?ap.k:''; })();
+  return `<div class="field"><label for="${id}">${esc(L('Ensuite, acclimatation à','Luego, aclimatación en'))}</label><select id="${id}">${places.map(P=>`<option value="${esc(P.k)}"${P.k===cur?' selected':''}>${esc(P.nom)}${P.phase==='apres'?'':esc(L(' (avant décaissage)',' (antes del desencajonado)'))}</option>`).join('')}<option value=""${!cur?' selected':''}>${esc(L('— pas d\'acclimatation notée —','— sin aclimatación anotada —'))}</option></select><span class="ex">${esc(L("Le temps d'acclimatation compte à partir de la sortie du frigo.","El tiempo de aclimatación cuenta desde la salida del frigorífico."))}</span></div>`; }
+async function frAccApply(ch,selId,lots,dOut){ const el=$(selId); if(!el||!el.value) return 0; const grp=dosGroup(ch)||[ch]; const P=dosPlaces(grp).find(p=>p.k===el.value); if(!P) return 0;
+  const keys=[...new Set(lots.filter(l=>l!=null&&l!=='').map(l=>ch.id+'|'+l))]; if(!keys.length) return 0; return accEnterLots(grp,P,keys,dOut.slice(0,10)); }
 
 /* ---------- Premier lancement ---------- */
 function renderWelcome(){
@@ -3481,7 +3510,7 @@ function tabFrigo(ch, body){
     if(ed&&ed.id===e.id&&(ed.mode==='out'||ed.mode==='edit')){ d.innerHTML=ed.mode==='out'?frigoOutFormHTML(e):frigoInFormHTML(ch,ed,e); el.appendChild(d); bindFrigoForms(ch,F); return; }
     d.innerHTML=`<div class="hhead"><span class="d">${esc(L('Palox ','Palox ')+e.palox)}${e.lot?' · '+esc(L('lot ','lote ')+e.lot):''}</span><span class="mono">${e.nb?esc(fmtN(e.nb))+' pl.':''}</span></div>
       <div class="rem">${esc(L('Entré le ','Entró el ')+dtFr(e.dIn))}${e.dOut?esc(' · '+L('sorti le ','salió el ')+dtFr(e.dOut)):''}</div>
-      <div class="frdur ${e.dOut?'out':'in'}">${esc(e.dOut?L('Sorti après ','Salió después de ')+durTxt(h):L('Au frigo depuis ','En el frigorífico desde hace ')+durTxt(h))}</div>
+      <div class="frdur ${e.dOut?'out':'in'}">${esc(e.dOut?L('Sorti après ','Salió después de ')+durTxt(h):L('Au frigo depuis ','En el frigorífico desde hace ')+durTxt(h))}</div>${e.dOut&&e.lot?(()=>{ const a=accDays(ch,e.lot); return a&&a.start>=e.dOut.slice(0,10)?`<div class="fracc">🌤️ ${esc(a.done?L('Acclimaté ','Aclimatado ')+a.days+L(' j avant la plantation',' d antes de la plantación'):L('En acclimatation depuis ','En aclimatación desde hace ')+a.days+L(' j',' d'))}</div>`:''; })():''}
       ${e.remIn?`<div class="hint">${esc(L('Entrée : ','Entrada: ')+e.remIn)}</div>`:''}${e.remOut?`<div class="hint">${esc(L('Sortie : ','Salida: ')+e.remOut)}</div>`:''}<div class="who">${esc(authorName(e))}</div>`;
     const row=document.createElement('div'); row.className='row';
     if(!e.dOut){ const o=document.createElement('button'); o.type='button'; o.className='primary'; o.textContent=L('Sortie du frigo','Salida del frigorífico'); o.onclick=()=>{ S.frEdit={chId:ch.id, mode:'out', id:e.id}; keep(); }; row.appendChild(o); }
@@ -3511,16 +3540,18 @@ function frigoInFormHTML(ch,ed,e){ e=e||{}; const lots=ch.lots||[];
     <div class="row"><button class="primary" type="button" id="fi-ok">${esc(L('Enregistrer','Guardar'))}</button><button class="ghost" type="button" id="fi-x">${esc(L('Annuler','Cancelar'))}</button></div>
     ${e.id?`<button class="ghost danger" type="button" id="fi-del">${esc(L('Supprimer ce palox','Eliminar este palox'))}</button>`:''}
     <div class="status" id="fi-st"></div></div>`; }
-function frigoOutFormHTML(e){ return `<div class="card" style="gap:10px;background:var(--sunk)" id="fo-form"><h3>${esc(L('Sortie du palox ','Salida del palox ')+e.palox)}</h3>
+function frigoOutFormHTML(e,ch){ ch=ch||curChauffe(); return `<div class="card" style="gap:10px;background:var(--sunk)" id="fo-form"><h3>${esc(L('Sortie du palox ','Salida del palox ')+e.palox)}</h3>
     <div class="rem">${esc(L('Entré le ','Entró el ')+dtFr(e.dIn))}</div>
     <div class="field"><label for="fo-d">${esc(L('Date et heure de sortie','Fecha y hora de salida'))}</label><input id="fo-d" type="datetime-local" value="${esc(nowLocal())}"></div>
     <div class="sumbox" id="fo-dur"></div>
     <div class="field"><label for="fo-r">${esc(L('Remarque','Observación'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="fo-r" type="text" placeholder="${esc(L('Ex. : vers la plantation, parcelle du bas','Ej.: hacia la plantación, parcela de abajo'))}"></div>
+    ${frAccSelHTML(ch,'fo-acc',[e.lot])}
     <div class="row"><button class="primary" type="button" id="fo-ok" data-id="${esc(e.id)}">${esc(L('Enregistrer la sortie','Guardar la salida'))}</button><button class="ghost" type="button" id="fo-x">${esc(L('Annuler','Cancelar'))}</button></div><div class="status" id="fo-st"></div></div>`; }
 function frigoOutAllHTML(ch,inn){ return `<div class="card" style="gap:10px;background:var(--sunk)" id="fa-form"><h3>${esc(L('Sortir plusieurs palox','Sacar varios palox'))}</h3>
     <div class="plkinds" id="fa-p">${inn.map(e=>`<button type="button" data-id="${esc(e.id)}" aria-pressed="false">${esc(L('Palox ','Palox ')+e.palox)}</button>`).join('')}</div>
     <div class="field"><label for="fa-d">${esc(L('Date et heure de sortie','Fecha y hora de salida'))}</label><input id="fa-d" type="datetime-local" value="${esc(nowLocal())}"></div>
     <div class="field"><label for="fa-r">${esc(L('Remarque','Observación'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="fa-r" type="text"></div>
+    ${frAccSelHTML(ch,'fa-acc',inn.map(e=>e.lot))}
     <div class="row"><button class="primary" type="button" id="fa-ok">${esc(L('Sortir les palox choisis','Sacar los palox elegidos'))}</button><button class="ghost" type="button" id="fa-x">${esc(L('Annuler','Cancelar'))}</button></div><div class="status" id="fa-st"></div></div>`; }
 function bindFrigoForms(ch,F){ const keep=()=>{ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); }; const ed=S.frEdit;
   if($('fi-form')&&!$('fi-form').dataset.b){ $('fi-form').dataset.b=1; const e=ed&&ed.id?F.E.find(x=>x.id===ed.id):null;
@@ -3547,13 +3578,13 @@ function bindFrigoForms(ch,F){ const keep=()=>{ const y=window.scrollY; renderCh
     const upd=()=>{ const v=$('fo-d').value; $('fo-dur').textContent=v?L('Temps au frigo : ','Tiempo en el frigorífico: ')+durTxt(frigoDur(Object.assign({},e,{dOut:v}))):''; }; $('fo-d').addEventListener('input',upd); upd();
     $('fo-x').onclick=()=>{ S.frEdit=null; keep(); };
     $('fo-ok').onclick=async()=>{ const v=$('fo-d').value; if(!v){ $('fo-st').textContent=L('Indique la date de sortie.','Indica la fecha de salida.'); $('fo-st').className='status err'; return; } if(v<e.dIn){ $('fo-st').textContent=L("La sortie est avant l'entrée.","La salida es antes de la entrada."); $('fo-st').className='status err'; return; }
-      await saveEntry(Object.assign({},e,{dOut:v, remOut:$('fo-r').value.trim(), auteurId:S.me.id, auteurNom:S.me.nom})); S.frEdit=null; toast(L('Palox ','Palox ')+e.palox+L(' sorti après ',' salió después de ')+durTxt(frigoDur(Object.assign({},e,{dOut:v})))+'.'); keep(); }; }
+      await saveEntry(Object.assign({},e,{dOut:v, remOut:$('fo-r').value.trim(), auteurId:S.me.id, auteurNom:S.me.nom})); try{ await frAccApply(ch,'fo-acc',[e.lot],v); }catch(err){ console.warn(err); } S.frEdit=null; toast(L('Palox ','Palox ')+e.palox+L(' sorti après ',' salió después de ')+durTxt(frigoDur(Object.assign({},e,{dOut:v})))+'.'); keep(); }; }
   if($('fa-form')&&!$('fa-form').dataset.b){ $('fa-form').dataset.b=1; const chosen=new Set();
     $('fa-p').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const id=b.dataset.id; if(chosen.has(id)) chosen.delete(id); else chosen.add(id); b.setAttribute('aria-pressed',chosen.has(id)); });
     $('fa-x').onclick=()=>{ S.frEdit=null; keep(); };
     $('fa-ok').onclick=async()=>{ const v=$('fa-d').value; const st=$('fa-st'); if(!chosen.size){ st.textContent=L('Touche les palox qui sortent.','Toca los palox que salen.'); st.className='status err'; return; } if(!v){ st.textContent=L('Indique la date de sortie.','Indica la fecha de salida.'); st.className='status err'; return; }
       const ls=F.inn.filter(e=>chosen.has(e.id)); if(ls.some(e=>v<e.dIn)){ st.textContent=L("La sortie est avant l'entrée d'un palox.","La salida es antes de la entrada de un palox."); st.className='status err'; return; }
-      await saveEntries(ls.map(e=>Object.assign({},e,{dOut:v, remOut:$('fa-r').value.trim(), auteurId:S.me.id, auteurNom:S.me.nom}))); S.frEdit=null; toast(ls.length+L(' palox sortis du frigo.',' palox salieron del frigorífico.')); keep(); }; }
+      await saveEntries(ls.map(e=>Object.assign({},e,{dOut:v, remOut:$('fa-r').value.trim(), auteurId:S.me.id, auteurNom:S.me.nom}))); try{ await frAccApply(ch,'fa-acc',ls.map(e=>e.lot),v); }catch(err){ console.warn(err); } S.frEdit=null; toast(ls.length+L(' palox sortis du frigo.',' palox salieron del frigorífico.')); keep(); }; }
 }
 function frigoRegistreHTML(ch){ const E=frigoEnts(ch), T=frigoTemps(ch); if(!E.length&&!T.length) return ''; const s=frigoSeuils(ch); const tv=T.filter(r=>r.t!=null).map(r=>r.t);
   return `${E.length?`<section><h3>${esc(L('Entrées et sorties par palox','Entradas y salidas por palox'))}</h3><div class="scrollx"><table><thead><tr><th>${esc(L('Palox','Palox'))}</th><th>${esc(L('Lot','Lote'))}</th><th>${esc(L('Plants','Plantas'))}</th><th>${esc(L('Entrée','Entrada'))}</th><th>${esc(L('Sortie','Salida'))}</th><th>${esc(L('Temps au frigo','Tiempo en frigorífico'))}</th><th>${esc(L('Remarques','Observaciones'))}</th><th>${esc(L('Par','Por'))}</th></tr></thead><tbody>${E.map(e=>`<tr><td>${esc(e.palox)}</td><td>${esc(e.lot||'')}</td><td>${e.nb!=null?esc(fmtN(e.nb)):''}</td><td>${esc(dtFr(e.dIn))}</td><td${e.dOut?'':' class="al"'}>${esc(e.dOut?dtFr(e.dOut):L('encore au frigo','todavía en el frigorífico'))}</td><td>${esc(durTxt(frigoDur(e)))}</td><td>${esc([e.remIn,e.remOut].filter(Boolean).join(' / '))}</td><td>${esc(authorName(e))}</td></tr>`).join('')}</tbody></table></div></section>`:''}
