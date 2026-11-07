@@ -528,6 +528,9 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .ppbedit{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:8px}#ppb-add{max-width:100%}
 .fracc{font-size:13px;font-weight:600;color:var(--ok);margin-top:2px}
 .dchip small{font-size:11.5px;color:var(--muted);margin-left:2px}
+.cvbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.cvbtns button{min-height:52px;font-size:14px;padding:4px 6px}
+@media (max-width:520px){.cvbtns{grid-template-columns:1fr}}
+.cvhist{display:grid}
 </style>
 </head>
 <body>
@@ -548,7 +551,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.75.0';
+const APP_VERSION = '2.76.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1247,6 +1250,7 @@ function tousDetHTML(x){ const c=x.c, lot=String(x.l.lot); const items=[];
   const de=entriesOf(c.id,'decaisse').find(z=>String(z.lot)===lot); if(de) items.push({d:de.dDeb, t:L('Décaissé','Desencajonado')+(de.pDec!=null?' : '+fmtN(de.pDec)+' px':'')+(de.pRem!=null?' → '+fmtN(de.pRem)+L(' re-remplis',' rellenados'):'')+(de.cire===true?L(' · cire',' · cera'):''), del:'e:'+de.id});
   const pe=plLotOf(c,lot); if(pe) items.push({d:pe.date, t:(plFini(pe)?L('Planté (fini)','Plantado (terminado)'):L('Plantation commencée','Plantación empezada'))+(pe.terrain?L(' · noté sur le terrain',' · anotado en el terreno'):''), del:pe.terrain?null:'e:'+pe.id, tog:pe.id, fini:plFini(pe)});
   const bi=bilanOf(c.id,lot); if(bi) items.push({d:bi.dateTri||'', t:L('Trié','Seleccionado')+(bilanRate(bi)!=null?' : '+pct(bilanRate(bi)):''), del:'e:'+bi.id});
+  covEnts(c).filter(e=>(e.lots||[]).map(String).includes(lot)).forEach(e=>items.push({d:(e.dt||'').slice(0,10), t:'🧣 '+(e.act==='on'?L('Remis : ','Puesto: '):L('Retiré : ','Retirado: '))+covWhat(e.quoi)+(e.dt&&e.dt.length>10?' ('+e.dt.slice(11,16)+')':''), del:'e:'+e.id}));
   lotNotes(c,lot).forEach(n=>items.push({d:n.date, t:'📝 '+n.texte, sub:n.auteurNom, del:'n:'+n.id}));
   items.sort((a,b)=>(a.d||'').localeCompare(b.d||''));
   return `<div class="card tlsheet" style="gap:8px"><div class="hhead"><h3 style="margin:0">${esc(L('Lot ','Lote ')+lot)} · ${esc(c.nom)}</h3><button class="linkbtn" type="button" id="td-x">${esc(L('Fermer','Cerrar'))}</button></div>
@@ -1410,6 +1414,7 @@ function entryText(e, grp){ const c=grp.find(x=>x.id===e.chauffeId); const cn=gr
     case 'plpass': return '🌱 '+L('Passage ','Pasada ')+e.n+' · '+e.parc;
     case 'plcharge': return '🚜 '+L('Remorque : ','Remolque: ')+(e.lots||[]).map(x=>x.lot).join(', ');
     case 'plantop': case 'phyto': return '💧 '+(e.kind||e.produit||L('Intervention','Intervención'))+(e.remarque?' : '+e.remarque:'')+cn;
+    case 'chcov': return '🧣 '+(e.act==='on'?L('Remis : ','Puesto: '):L('Retiré : ','Retirado: '))+covWhat(e.quoi)+' · '+((e.lots||[]).length>1?L('lots ','lotes '):L('lot ','lote '))+(e.lots||[]).join(', ')+cn;
     case 'bilan': return '🔍 '+L('Triage ','Selección ')+lot+(bilanRate(e)!=null?' : '+pct(bilanRate(e)):'')+cn;
     case 'chstep': case 'plantstep': return '✔️ '+(e.titre||e.label||L('Étape','Etapa'))+cn;
     default: return null; } }
@@ -1490,6 +1495,37 @@ function frAccSelHTML(ch,id,lots){ const grp=dosGroup(ch)||[ch]; let places=[]; 
   return `<div class="field"><label for="${id}">${esc(L('Ensuite, acclimatation à','Luego, aclimatación en'))}</label><select id="${id}">${places.map(P=>`<option value="${esc(P.k)}"${P.k===cur?' selected':''}>${esc(P.nom)}${P.phase==='apres'?'':esc(L(' (avant décaissage)',' (antes del desencajonado)'))}</option>`).join('')}<option value=""${!cur?' selected':''}>${esc(L('— pas d\'acclimatation notée —','— sin aclimatación anotada —'))}</option></select><span class="ex">${esc(L("Le temps d'acclimatation compte à partir de la sortie du frigo.","El tiempo de aclimatación cuenta desde la salida del frigorífico."))}</span></div>`; }
 async function frAccApply(ch,selId,lots,dOut){ const el=$(selId); if(!el||!el.value) return 0; const grp=dosGroup(ch)||[ch]; const P=dosPlaces(grp).find(p=>p.k===el.value); if(!P) return 0;
   const keys=[...new Set(lots.filter(l=>l!=null&&l!=='').map(l=>ch.id+'|'+l))]; if(!keys.length) return 0; return accEnterLots(grp,P,keys,dOut.slice(0,10)); }
+
+/* ===== Chauffe : couverture et plastique retirés (ou remis) sur des lots choisis =====
+   Entrée 'chcov' : {lots:[…], quoi:'couv'|'plast'|'both', act:'off'|'on', dt:'AAAA-MM-JJTHH:MM'} */
+const covEnts=ch=>entriesOf(ch.id,'chcov').slice().sort((a,b)=>String(a.dt).localeCompare(String(b.dt))||String(a.creeLe).localeCompare(String(b.creeLe)));
+function covState(ch,lot){ const st={couv:null, plast:null}; covEnts(ch).forEach(e=>{ if(!(e.lots||[]).map(String).includes(String(lot))) return; ['couv','plast'].forEach(k=>{ if(e.quoi===k||e.quoi==='both') st[k]=e.act==='on'?null:e.dt; }); }); return st; }
+const covWhat=q=>q==='couv'?L('la couverture','la manta'):q==='plast'?L('le plastique','el plástico'):L('la couverture et le plastique','la manta y el plástico');
+function covCardHTML(ch){ const lots=(ch.lots||[]).slice().sort((a,b)=>String(a.lot).localeCompare(String(b.lot),undefined,{numeric:true})); if(!lots.length) return '';
+  const sel=S.covSel&&S.covSel.ch===ch.id?S.covSel.set:new Set(); const E=covEnts(ch);
+  const off=lots.filter(l=>{ const s=covState(ch,l.lot); return s.couv||s.plast; }).length;
+  const dd=v=>v?isoFr(v.slice(0,10)).slice(0,5)+(v.length>10?' '+v.slice(11,16):''):'';
+  const inner=`<p class="note" style="margin:0">${esc(L('Touche les lots, puis ce que tu retires. La date et l\'heure sont celles de maintenant, tu peux les changer.','Toca los lotes y luego lo que retiras. La fecha y la hora son las de ahora, puedes cambiarlas.'))}</p>
+    <div class="row" style="justify-content:space-between;align-items:center"><span class="small">${esc(plural(sel.size,'lot choisi','lots choisis','lote elegido','lotes elegidos'))}</span><button class="linkbtn" type="button" id="cv-all">${esc(sel.size===lots.length?L('Tout désélectionner','Deseleccionar todo'):L('Tout sélectionner','Seleccionar todo'))}</button></div>
+    <div class="dgrid" id="cv-grid">${lots.map(l=>{ const s=covState(ch,l.lot); const on=sel.has(String(l.lot));
+      return `<button type="button" class="dbox${on?' on':''}" data-lot="${esc(l.lot)}" aria-pressed="${on}"><span class="dboxh"><b>${esc(l.lot)}</b></span><small>${esc([l.variete,l.pg].filter(Boolean).join(' / '))}</small><small class="dst">${s.couv?'🧣 '+esc(L('retirée ','retirada ')+dd(s.couv)):'🧣 '+esc(L('en place','puesta'))}</small><small class="dst">${s.plast?'🎞️ '+esc(L('retiré ','retirado ')+dd(s.plast)):'🎞️ '+esc(L('en place','puesto'))}</small></button>`; }).join('')}</div>
+    <div class="field"><label for="cv-dt">${esc(L('Date et heure','Fecha y hora'))}</label><input id="cv-dt" type="datetime-local" value="${esc(S.covDt||nowLocal())}"></div>
+    <div class="cvbtns"><button class="primary" type="button" data-cv="couv">${esc(L('Retirer la couverture','Retirar la manta'))}</button><button class="primary" type="button" data-cv="plast">${esc(L('Retirer le plastique','Retirar el plástico'))}</button><button class="primary" type="button" data-cv="both">${esc(L('Retirer les deux','Retirar los dos'))}</button></div>
+    <button class="linkbtn" type="button" data-cv="both" data-act="on" style="justify-self:start">${esc(L('↺ Remettre couverture et plastique','↺ Volver a poner manta y plástico'))}</button>
+    <div class="status" id="cv-st"></div>
+    ${E.length?`<div class="cvhist"><span class="lab">${esc(L('Historique','Historial'))}</span>${E.slice().reverse().map(e=>`<div class="tlhi"><span class="mono">${esc(dd(e.dt))}</span><span>${esc((e.act==='on'?L('Remis : ','Puesto: '):L('Retiré : ','Retirado: '))+covWhat(e.quoi)+' · '+((e.lots||[]).length>1?L('lots ','lotes '):L('lot ','lote '))+(e.lots||[]).join(', '))}${e.jour?' <small class="hint">J'+e.jour+'</small>':''} <small class="hint">${esc(e.auteurNom||'')}</small></span><button type="button" class="ghost tlsm tldel" data-cvdel="${esc(e.id)}" aria-label="${esc(L('Supprimer','Eliminar'))}">🗑</button></div>`).join('')}</div>`:''}`;
+  return fold('ccov', '🧣 '+esc(L('Couverture et plastique','Manta y plástico')), off?off+' / '+lots.length+L(' découverts',' descubiertos'):'', `<div class="card" style="gap:10px">${inner}</div>`, !!(ch.debut&&!ch.sortie)); }
+function bindCov(ch){ if(!$('cv-grid')) return; if(!S.covSel||S.covSel.ch!==ch.id) S.covSel={ch:ch.id, set:new Set()}; const sel=S.covSel.set;
+  const re=()=>{ const y=window.scrollY; const c=$('c-cov'); if(c){ c.innerHTML=covCardHTML(ch); bindCov(ch); } window.scrollTo({top:y}); };
+  $('cv-grid').querySelectorAll('.dbox').forEach(b=>b.onclick=()=>{ const l=b.dataset.lot; sel.has(l)?sel.delete(l):sel.add(l); S.covDt=$('cv-dt').value; re(); });
+  $('cv-all').onclick=()=>{ const all=(ch.lots||[]).map(l=>String(l.lot)); if(sel.size===all.length) sel.clear(); else all.forEach(l=>sel.add(l)); S.covDt=$('cv-dt').value; re(); };
+  $('cv-dt').onchange=()=>{ S.covDt=$('cv-dt').value; };
+  document.querySelectorAll('#c-cov [data-cv]').forEach(b=>b.onclick=async()=>{ const st=$('cv-st'); if(!sel.size){ st.textContent=L('Touche d\'abord les lots.','Toca primero los lotes.'); st.className='status err'; return; }
+    const dt=$('cv-dt').value||nowLocal(); const act=b.dataset.act==='on'?'on':'off'; const lots=[...sel].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+    await saveEntry({id:'cov-'+uid(), type:'chcov', chauffeId:ch.id, lots, quoi:b.dataset.cv, act, dt, jour:ch.debut?chDayOfIso(ch,dt.slice(0,10)):null, auteurId:S.me.id, auteurNom:S.me.nom, creeLe:nowIso()});
+    toast((act==='on'?L('Remis : ','Puesto: '):L('Retiré : ','Retirado: '))+covWhat(b.dataset.cv)+' · '+plural(lots.length,'lot','lots','lote','lotes')+'.'); sel.clear(); S.covDt=null; re(); });
+  document.querySelectorAll('#c-cov [data-cvdel]').forEach(b=>{ let armed=false; b.onclick=async()=>{ if(!armed){ armed=true; b.textContent=L('Supprimer ?','¿Eliminar?'); b.classList.add('arm'); setTimeout(()=>{ armed=false; if(b.isConnected){ b.textContent='🗑'; b.classList.remove('arm'); } },3000); return; }
+    const e=S.entrees.find(x=>x.id===b.dataset.cvdel); if(e) await saveEntry(Object.assign({},e,{supprime:true})); toast(L('Supprimé.','Eliminado.')); re(); }; }); }
 
 /* ---------- Premier lancement ---------- */
 function renderWelcome(){
@@ -1915,8 +1951,8 @@ function thermoAvgText(TV){ const a=thAvg(TV.filter(t=>t.pos==='in').map(t=>t.v)
 
 /* ----- Onglet Chauffe : saisie du jour + contrôle par lot (comme l'onglet Acclim.) ----- */
 function tabChauffe(ch, body){
-  body.innerHTML=`<div id="c-steps" class="tabpart">${stepsCardHTML(ch,'chauffe')}</div><div id="c-jour" class="tabpart"></div><div id="c-fin" class="tabpart"></div>${fold('clots', '<span id="c-lots-t">'+esc(L('Contrôle par lot','Control por lote'))+'</span>', entriesOf(ch.id,'lot').length||'', '<div id="c-lots" class="tabpart"></div>', S.tab==='lots')}`;
-  bindSteps(ch,'chauffe'); tabJour(ch, $('c-jour')); $('c-fin').innerHTML=finCardHTML(ch); bindFinCard(ch); tabLots(ch, $('c-lots'));
+  body.innerHTML=`<div id="c-steps" class="tabpart">${stepsCardHTML(ch,'chauffe')}</div><div id="c-jour" class="tabpart"></div><div id="c-cov" class="tabpart">${covCardHTML(ch)}</div><div id="c-fin" class="tabpart"></div>${fold('clots', '<span id="c-lots-t">'+esc(L('Contrôle par lot','Control por lote'))+'</span>', entriesOf(ch.id,'lot').length||'', '<div id="c-lots" class="tabpart"></div>', S.tab==='lots')}`;
+  bindSteps(ch,'chauffe'); tabJour(ch, $('c-jour')); try{ bindCov(ch); }catch(e){ console.error(e); } $('c-fin').innerHTML=finCardHTML(ch); bindFinCard(ch); tabLots(ch, $('c-lots'));
   if(S.tab==='lots'){ S.folds.clots=true; const fd=document.querySelector('details[data-fold="clots"]'); if(fd) fd.open=true; S.tab='jour'; setTimeout(()=>{ const t=$('c-lots-t'); if(t){ const hd=document.querySelector('header.top'); window.scrollTo({top:t.getBoundingClientRect().top+window.scrollY-(hd?hd.offsetHeight:0)-8}); } },30); }
 }
 /* ----- Sections repliables, pour une page plus simple (l'état ouvert/fermé est gardé pendant la session) ----- */
