@@ -524,6 +524,8 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .aptab tbody tr{cursor:pointer}.aptab tbody tr:active td,.aptab tbody tr:active th{background:var(--accent-soft)}
 .aptab .apnote{white-space:normal;min-width:160px;max-width:240px;color:var(--muted)}
 .aptab .tlch{font-style:normal}
+.ppnav{display:flex;align-items:center;justify-content:space-between;gap:6px}.ppnav button{min-height:40px;padding:4px 10px;font-size:14px}.ppnav button[disabled]{visibility:hidden}
+.ppbedit{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:8px}#ppb-add{max-width:100%}
 </style>
 </head>
 <body>
@@ -544,7 +546,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.73.0';
+const APP_VERSION = '2.74.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -3025,7 +3027,9 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
     lotBtns=[...new Set(lotBtns.concat(curK))].filter(k=>!plFini(plE(k))).sort((a,b)=>AL.findIndex(x=>x.k===a)-AL.findIndex(x=>x.k===b));
     const others=AL.filter(x=>!lotBtns.includes(x.k)&&!plFini(plE(x.k)));
     const target=nSel===3?L('les 3 buttes','los 3 camellones'):sel.map((v,i)=>v?ppButte(cur,i):null).filter(x=>x!=null).map(n=>L('butte ','camellón ')+n).join(L(' et ',' y '));
-    field=`<div class="pphead"><b>${esc(L('Passage ','Pasada ')+cur.n)}</b><span>${ppArr(ch,parc,ppAller(cur))}</span>${!isLast?`<button class="linkbtn" type="button" id="pp-last">${esc(L('↩ revenir au dernier','↩ volver al último'))}</button>`:''}</div>
+    const ci=pass.findIndex(x=>x.id===cur.id);
+    field=`<div class="ppnav"><button type="button" class="ghost" id="pp-prev"${ci<=0?' disabled':''}>‹ ${esc(L('Passage ','Pasada ')+(ci>0?pass[ci-1].n:''))}</button><span class="small">${esc(isLast?L('passage en cours','pasada en curso'):L('correction d\'un passage','corrección de una pasada'))}</span><button type="button" class="ghost" id="pp-nextp"${isLast?' disabled':''}>${esc(!isLast?L('Passage ','Pasada ')+pass[ci+1].n:'')} ›</button></div>
+      <div class="pphead"><b>${esc(L('Passage ','Pasada ')+cur.n)}</b><span>${ppArr(ch,parc,ppAller(cur))}</span>${!isLast?`<button class="linkbtn" type="button" id="pp-last">${esc(L('↩ revenir au dernier','↩ volver al último'))}</button>`:''}</div>
       <div class="ppbuttes">${[0,1,2].map(i=>{ const seq=(cur.b||[])[i]||[]; return `<button type="button" class="ppb" data-i="${i}" aria-pressed="${!!sel[i]}"><small>${esc(L('Butte ','Camellón ')+ppButte(cur,i))}</small><span>${seq.length?seq.map(x=>chip(ppXK(x,cur))).join('<i>→</i>'):'<em>?</em>'}</span></button>`; }).join('')}</div>
       <div class="pptarget">${esc(L('Touche le lot planté sur ','Toca el lote plantado en ')+target)}${nSel<3?` <button class="linkbtn" type="button" id="pp-all">${esc(L('les 3','los 3'))}</button>`:''}</div>
       <div class="pplots">${lotBtns.map(k=>`<button type="button" class="pplb" data-k="${esc(k)}" style="--c:${col[k]||'var(--accent)'}"><b>${esc(LB.chip(k))}</b><small>${esc(LB.info(k))}</small></button>`).join('')}${others.length?`<select id="pp-other" class="ppother"><option value="">${esc(L('Autre…','Otro…'))}</option>${groups.map(c=>{ const o=others.filter(x=>x.c===c.id).map(x=>`<option value="${esc(x.k)}">${esc(x.lot+(x.l.variete?' · '+x.l.variete:''))}</option>`).join(''); return o?(LB.multi?`<optgroup label="${esc(c.nom)}">${o}</optgroup>`:o):''; }).join('')}</select>`:''}</div>
@@ -3112,6 +3116,7 @@ function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const w=$('pp-wr
   document.querySelectorAll('#pp-card .ppdelx').forEach(b=>b.onclick=busy(async()=>{ const e=JSON.parse(JSON.stringify(cur)); const i=Number(b.dataset.i), k=Number(b.dataset.k); (e.b[i]||[]).splice(k,1); await ppSave(e); toast(L('Lot retiré de la butte.','Lote quitado del camellón.')); keep(); }));
   if($('pp-delpass')){ let armed=false; $('pp-delpass').onclick=busy(async()=>{ const b=$('pp-delpass'); if(!armed){ armed=true; b.textContent=L('Toucher encore pour supprimer le passage ','Tocar otra vez para eliminar la pasada ')+cur.n; b.classList.add('arm'); setTimeout(()=>{ armed=false; if(b.isConnected){ b.textContent='🗑 '+L('Supprimer le passage ','Eliminar la pasada ')+cur.n; b.classList.remove('arm'); } },3500); return; }
     await removeEntry(cur); try{ await ppSync(cur.chauffeId); }catch(err){} S.ppCur=null; toast(L('Passage supprimé.','Pasada eliminada.')); keep(); }); }
+  { const ci=pass.findIndex(x=>x.id===cur.id); if($('pp-prev')) $('pp-prev').onclick=()=>{ if(ci>0){ S.ppCur=pass[ci-1].id; S.ppSel=[true,true,true]; keep(); } }; if($('pp-nextp')) $('pp-nextp').onclick=()=>{ if(ci<pass.length-1){ S.ppCur=pass[ci+1].id; S.ppSel=[true,true,true]; keep(); } }; }
   if($('pp-last')) $('pp-last').onclick=()=>{ S.ppCur=null; keep(); };
   if($('pp-listd')) $('pp-listd').addEventListener('toggle',()=>{ S.ppListOpen=$('pp-listd').open; });
   document.querySelectorAll('.pprow').forEach(b=>b.onclick=()=>{ S.ppCur=b.dataset.id; S.ppSel=[true,true,true]; keep(); setTimeout(()=>{ const c=$('pp-card'); if(c) c.scrollIntoView({block:'start'}); },30); }); }
@@ -3242,8 +3247,13 @@ function ppButPanel(ch,pc){ const sb=S.ppBut; if(!sb) return ''; const pass=ppPa
     ${!own&&!Ld?`<p class="hint" style="margin:0">${esc(L('Longueur pas encore indiquée : on compte 200 m pour placer les lots.','Largo aún no indicado: se cuentan 200 m para ubicar los lotes.'))}</p>`:''}
     ${n?`<span class="small" style="font-weight:700">${esc(L('Lots dans le sens de plantation','Lotes en el sentido de plantación'))} (${ppArr(ch,pc,ppAller(e))} ${esc(L('dans le sens du passage','en el sentido de la pasada'))})</span>
     ${seq.map((x,k)=>{ const key=ppXK(x,e); return `<div class="ppbrow"><span><span class="pplot" style="background:${col[key]}">${esc(LB.chip(key))}</span></span>${k<n-1?`<button type="button" class="ghost ppbm" data-k="${k}" data-d="-10">−10</button><input class="num ppbseg" data-k="${k}" inputmode="numeric" value="${m(k)}"><button type="button" class="ghost ppbm" data-k="${k}" data-d="10">+10</button><span>m</span>`:`<span class="small">${esc(n>1?L('le reste : ','el resto: ')+m(k)+' m':m(k)+' m')}</span>`}</div>`; }).join('')}`:''}
-    ${n>1&&manual?`<button class="linkbtn" type="button" id="ppb-auto">${esc(L('Remettre la position automatique','Volver a la posición automática'))}</button>`:''}</div>`; }
-function bindPlanEdit(ch, root){ const y0=()=>window.scrollY; const again=()=>{ const y=y0(); renderChauffe(); window.scrollTo({top:y}); };
+    ${n>1&&manual?`<button class="linkbtn" type="button" id="ppb-auto">${esc(L('Remettre la position automatique','Volver a la posición automática'))}</button>`:''}
+    <div class="ppbedit"><span class="small" style="font-weight:700">${esc(L('Changer les lots de cette butte','Cambiar los lotes de este camellón'))}</span>
+      <div class="ppdelrow">${seq.map((x,k)=>`<button type="button" class="ghost ppdelx" data-bk="${k}"><span class="pplot" style="background:${col[ppXK(x,e)]}">${esc(LB.chip(ppXK(x,e)))}</span> 🗑</button>`).join('')||`<span class="hint">${esc(L('Aucun lot noté.','Ningún lote anotado.'))}</span>`}</div>
+      <div class="row" style="gap:6px;align-items:center"><select id="ppb-add"><option value="">${esc(seq.length?L('+ Ajouter un lot à la suite…','+ Agregar un lote a continuación…'):L('+ Ajouter un lot…','+ Agregar un lote…'))}</option>${ppGroup(ch).map(c=>{ const o=(c.lots||[]).slice().sort((a,b)=>String(a.lot).localeCompare(String(b.lot),undefined,{numeric:true})).map(l=>`<option value="${esc(ppK(c.id,String(l.lot)))}">${esc(l.lot+(l.variete?' · '+l.variete:''))}</option>`).join(''); return ppGroup(ch).length>1?`<optgroup label="${esc(c.nom)}">${o}</optgroup>`:o; }).join('')}</select>
+      ${seq.length===1?`<span class="hint" style="font-size:12.5px">${esc(L('ou 🗑 puis ajoute le bon lot pour le remplacer','o 🗑 y agrega el lote correcto para reemplazarlo'))}</span>`:''}</div>
+      <button class="ghost" type="button" id="ppb-terrain">✏️ ${esc(L('Corriger tout le passage ','Corregir toda la pasada ')+e.n+L(' sur le terrain',' en el terreno'))}</button></div></div>`; }
+function bindPlanEdit(ch, root){ const y0=()=>window.scrollY; const again=()=>{ const y=y0(); const sx=[...document.querySelectorAll('.ppplanw')].map(w=>[w.scrollLeft,w.scrollTop]); renderChauffe(); window.scrollTo({top:y}); document.querySelectorAll('.ppplanw').forEach((w,i)=>{ if(sx[i]){ w.scrollLeft=sx[i][0]; w.scrollTop=sx[i][1]; } }); };
   root.querySelectorAll('.ppbhit').forEach(r=>r.addEventListener('click',()=>{ S.ppBut={id:r.dataset.pid, i:Number(r.dataset.pi)}; again(); }));
   root.querySelectorAll('.ppcfg').forEach(b=>b.onclick=async()=>{ const k=b.dataset.key, v=b.dataset.v; if(k==='depart') await ppSetSide(ch,b.dataset.parc,v); else await ppSetParcCfg(ch,b.dataset.parc,{[k]:v}); S.ppBut=null; again(); });
   root.querySelectorAll('details.ppset').forEach(d=>d.addEventListener('toggle',()=>{ S.ppSetOpen=d.open; }));
@@ -3261,6 +3271,11 @@ function bindPlanEdit(ch, root){ const y0=()=>window.scrollY; const again=()=>{ 
   $('ppb-x').onclick=()=>{ S.ppBut=null; again(); };
   $('ppb-len').onchange=async()=>{ const v=num($('ppb-len').value); const {x}=ppParcCfg(ch,pc); const len=Object.assign({}, x&&x.len||{}); if(v>0) len[b]=v; else delete len[b]; await ppSetParcCfg(ch,pc,{len}); again(); };
   $('ppb-off').onchange=async()=>{ const v=num($('ppb-off').value); const {x}=ppParcCfg(ch,pc); const off=Object.assign({}, x&&x.off||{}); if(v>0) off[b]=v; else delete off[b]; await ppSetParcCfg(ch,pc,{off}); again(); };
+  pn.querySelectorAll('.ppdelx[data-bk]').forEach(b=>b.onclick=async()=>{ const e=JSON.parse(JSON.stringify(ppPass(ch,pc).find(p=>p.id===e0.id))); (e.b[i]||[]).splice(Number(b.dataset.bk),1); (e.b[i]||[]).forEach((x,k)=>{ if(k===0) delete x.f; }); await ppSave(e); toast(L('Lot retiré de la butte.','Lote quitado del camellón.')); again(); });
+  if($('ppb-add')) $('ppb-add').onchange=async()=>{ const v=$('ppb-add').value; if(!v) return; const {c,lot}=ppKs(v); const e=JSON.parse(JSON.stringify(ppPass(ch,pc).find(p=>p.id===e0.id))); e.b=e.b||[[],[],[]]; const seq=e.b[i]=e.b[i]||[]; const last=seq[seq.length-1];
+    if(last&&ppXK(last,e)===v){ toast(L('Ce lot est déjà le dernier de la butte.','Este lote ya es el último del camellón.')); $('ppb-add').value=''; return; }
+    seq.push({lot:String(lot), c, t:nowIso()}); await ppSave(e); toast(L('Lot ajouté à la butte.','Lote agregado al camellón.')); again(); };
+  if($('ppb-terrain')) $('ppb-terrain').onclick=()=>{ S.tab='plant'; S.plView='terrain'; S.ppParc=pc; S.ppCur=e0.id; S.ppSel=[0,1,2].map(j=>j===i); S.ppBut=null; renderChauffe(); setTimeout(()=>{ const c=$('pp-card'); if(c) c.scrollIntoView({block:'start'}); },40); };
   const saveSegs=async ms=>{ const pass=ppPass(ch,pc); const e=JSON.parse(JSON.stringify(pass.find(p=>p.id===e0.id))); const seq=e.b[i]; const Lb=ppLen(ch,pc,b)||200; let acc=0;
     for(let k=0;k<seq.length-1;k++){ acc+=Math.max(0,ms[k]); seq[k+1].f=Math.min(0.99,Math.max(0.01,acc/Lb)); }
     await saveEntry(e); again(); };
