@@ -554,6 +554,9 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .ppil{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}.ppil b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ppisw{display:inline-block;width:16px;height:16px;border-radius:4px;border:1px solid var(--line);flex:none;background:repeating-linear-gradient(45deg,#fff 0 3px,#ddd 3px 6px)}
 @media (max-width:520px){.ppimr{grid-template-columns:1fr}}
+#hc-wrap{margin-top:10px}
+.hcrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}.hcrow:first-child{border-top:0}
+.hcseg{flex-wrap:wrap}.hcseg button{flex:1 1 auto}
 </style>
 </head>
 <body>
@@ -574,7 +577,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.83.0';
+const APP_VERSION = '2.84.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1857,6 +1860,48 @@ function bindPPI(ch){ const re=()=>{ const b=$('ppi-body'); if(!b) return; const
       renderChauffe(); setTimeout(()=>{ const c=document.querySelector('.ppplanw'); if(c) c.scrollIntoView({block:'start'}); },60); }
     catch(e){ console.warn(e); err(e.message||L('Import impossible.','Importación imposible.')); } }; }
 
+/* ===== Écran : plants hors chauffe ===== */
+function hcFoldHTML(ch){ const d=dossierOf(ch); const ls=d?(d.horsLots||[]):[]; const ed=S.hcEd&&S.hcEd.dos===(d&&d.id)?S.hcEd:null; const used=new Set(ppAllPass(ch).map(p=>[].concat(...(p.b||[]).map(q=>(q||[]).map(x=>ppXK(x,p))))).flat());
+  const inner=!d?`<p class="hint" style="margin:0">${esc(L("Range d'abord cette chauffe dans une saison (Infos → Modifier).","Primero guarda esta calefacción en una temporada (Infos → Modificar)."))}</p>`:`
+    <p class="hint" style="margin:0">${esc(L("Vignes mères, repiqués, variétés qui n'étaient pas en chauffe : ajoute-les ici, ils apparaissent ensuite avec les lots pour planter, sur le plan et dans l'import Excel.","Plantas madre, repicados, variedades que no estaban en calefacción: agrégalos aquí, luego aparecen con los lotes para plantar, en el plano y en la importación Excel."))}</p>
+    ${ls.length?`<div class="list">${ls.map((l,i)=>`<div class="hcrow"><span class="pplot" style="background:${ppColors(ch)[ppK(d.id,String(l.lot))]||'var(--accent)'}">${esc(l.lot)}</span><span><b>${esc(hcCatTxt(l.cat))}</b><br><small>${esc([[l.variete,l.pg].filter(Boolean).join(' / '), l.nb?fmtN(l.nb)+L(' plants',' plantas'):'', l.note||''].filter(Boolean).join(' · '))}</small></span><button type="button" class="ghost tlsm" data-hced="${i}">✏️</button><button type="button" class="ghost tlsm tldel" data-hcdel="${i}" aria-label="${esc(L('Supprimer','Eliminar'))}">🗑</button></div>`).join('')}</div>`:''}
+    ${ed?hcFormHTML(ch,d,ed,used):`<button class="ghost" type="button" id="hc-new">+ ${esc(L('Ajouter des plants hors chauffe','Agregar plantas fuera de calefacción'))}</button>`}
+    <div class="status" id="hc-st"></div>`;
+  return `<details class="gsec" id="hc-fold"${S.hcOpen||ed?' open':''}><summary>🌳 ${esc(L('Plants hors chauffe (vignes mères, repiqués…)','Plantas fuera de calefacción (plantas madre, repicados…)'))}${ls.length?' <span class="mono">'+ls.length+'</span>':''}</summary><div class="gsecb"><div class="card" style="gap:10px">${inner}</div></div></details>`; }
+function hcNextName(ls,cat){ const pre=cat==='vm'?'VM':cat==='rep'?'REP':'HC'; let n=1; const has=new Set(ls.map(l=>String(l.lot).toUpperCase())); while(has.has(pre+n)) n++; return pre+n; }
+function hcFormHTML(ch,d,ed,used){ const ls=d.horsLots||[]; const l=ed.i!=null?ls[ed.i]:{cat:ed.cat||'vm'}; const cat=ed.cat||l.cat||'vm'; const locked=ed.i!=null&&used.has(ppK(d.id,String(l.lot)));
+  return `<div class="card" style="gap:10px;background:var(--sunk)" id="hc-form">
+    <div class="field"><span class="lab">${esc(L('Quoi ?','¿Qué?'))}</span><div class="seg hcseg" id="hc-cat">${HC_CATS.map(([k,ic,t])=>`<button type="button" data-v="${k}" aria-pressed="${cat===k}">${ic} ${esc(L(t[0],t[1]).replace(/ \(.*\)$/,''))}</button>`).join('')}</div></div>
+    <div class="two"><div class="field"><label for="hc-lot">${esc(L('Nom sur le plan','Nombre en el plano'))}</label><input id="hc-lot" type="text" value="${esc(ed.i!=null?l.lot:(ed.lot||hcNextName(ls,cat)))}"${locked?' disabled':''} autocapitalize="characters">${locked?`<small class="hint">${esc(L('déjà planté : le nom ne change plus','ya plantado: el nombre ya no cambia'))}</small>`:''}</div>
+      <div class="field"><label for="hc-nb">${esc(L('Nombre de plants','Número de plantas'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="hc-nb" class="num" inputmode="numeric" value="${l.nb!=null?esc(fmtN(l.nb)):''}"></div></div>
+    <div class="two"><div class="field"><label for="hc-var">${esc(L('Variété','Variedad'))}</label><input id="hc-var" type="text" value="${esc(l.variete||'')}" list="hc-vars"></div>
+      <div class="field"><label for="hc-pg">${esc(L('Porte-greffe','Portainjerto'))}</label><input id="hc-pg" type="text" value="${esc(l.pg||'')}" list="hc-pgs"></div></div>
+    <datalist id="hc-vars">${[...new Set(liveChauffes().flatMap(c=>(c.lots||[]).map(x=>x.variete)).filter(Boolean))].sort().map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>
+    <datalist id="hc-pgs">${[...new Set(liveChauffes().flatMap(c=>(c.lots||[]).map(x=>x.pg)).filter(Boolean))].sort().map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>
+    <div class="field"><label for="hc-note">${esc(L('Note','Nota'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><input id="hc-note" type="text" value="${esc(l.note||'')}" placeholder="${esc(L('Ex. : greffés en 2025, clone 174…','Ej.: injertados en 2025, clon 174…'))}"></div>
+    <div class="row"><button class="primary" type="button" id="hc-ok">${esc(L('Enregistrer','Guardar'))}</button><button class="ghost" type="button" id="hc-x">${esc(L('Annuler','Cancelar'))}</button></div></div>`; }
+function bindHC(ch){ const f=$('hc-fold'); if(!f) return; f.ontoggle=()=>{ S.hcOpen=f.open; };
+  const d=dossierOf(ch); if(!d) return; const st=$('hc-st'); const err=t=>{ st.textContent=t; st.className='status err'; };
+  const re=()=>{ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); };
+  const usedNow=()=>new Set(ppAllPass(ch).map(p=>[].concat(...(p.b||[]).map(q=>(q||[]).map(x=>ppXK(x,p))))).flat());
+  const keepForm=()=>{ if(!S.hcEd) return; ['lot','var','pg','nb','note'].forEach(k=>{ const i=$('hc-'+k); if(i) S.hcEd['v_'+k]=i.value; }); };
+  if($('hc-new')) $('hc-new').onclick=()=>{ S.hcEd={dos:d.id, i:null, cat:'vm'}; S.hcOpen=true; re(); };
+  document.querySelectorAll('[data-hced]').forEach(b=>b.onclick=()=>{ S.hcEd={dos:d.id, i:Number(b.dataset.hced)}; S.hcOpen=true; re(); });
+  document.querySelectorAll('[data-hcdel]').forEach(b=>{ let armed=false; b.onclick=async()=>{ const i=Number(b.dataset.hcdel); const l=(d.horsLots||[])[i]; if(!l) return;
+    if(usedNow().has(ppK(d.id,String(l.lot)))) return err(L('Ces plants sont déjà sur le plan : enlève-les d\'abord des buttes.','Estas plantas ya están en el plano: quítalas primero de los camellones.'));
+    if(!armed){ armed=true; b.textContent=L('Supprimer ?','¿Eliminar?'); b.classList.add('arm'); setTimeout(()=>{ armed=false; if(b.isConnected){ b.textContent='🗑'; b.classList.remove('arm'); } },3000); return; }
+    const ls=(d.horsLots||[]).slice(); ls.splice(i,1); await saveEntry(Object.assign({},d,{horsLots:ls})); toast(L('Supprimé.','Eliminado.')); re(); }; });
+  if(!$('hc-form')) return; const ed=S.hcEd;
+  if(ed.v_lot!=null) ['lot','var','pg','nb','note'].forEach(k=>{ const i=$('hc-'+k); if(i&&ed['v_'+k]!=null&&!i.disabled) i.value=ed['v_'+k]; });
+  $('hc-cat').querySelectorAll('button').forEach(b=>b.onclick=()=>{ keepForm(); const ls=d.horsLots||[]; const auto=ed.i==null&&(!ed.v_lot||ed.v_lot===hcNextName(ls,ed.cat||'vm')); ed.cat=b.dataset.v; if(auto) ed.v_lot=hcNextName(ls,ed.cat); re(); });
+  $('hc-x').onclick=()=>{ S.hcEd=null; re(); };
+  $('hc-ok').onclick=async()=>{ const ls=(d.horsLots||[]).slice(); const old=ed.i!=null?ls[ed.i]:null; const lot=$('hc-lot').value.trim(); if(!lot) return err(L('Donne un nom (il s\'affiche sur le plan).','Da un nombre (se muestra en el plano).'));
+    if(lot.includes('|')) return err(L('Le nom ne peut pas contenir « | ».','El nombre no puede contener « | ».'));
+    if(ls.some((x,j)=>j!==ed.i&&ppiNorm(x.lot)===ppiNorm(lot))) return err(L('Ce nom existe déjà.','Este nombre ya existe.'));
+    const nb=$('hc-nb').value.trim(); if(nb&&!(num(nb)>=0)) return err(L('Nombre de plants illisible.','Número de plantas ilegible.'));
+    const it={lot, cat:ed.cat||(old&&old.cat)||'vm', variete:$('hc-var').value.trim(), pg:$('hc-pg').value.trim(), nb:nb?num(nb):null, note:$('hc-note').value.trim()};
+    if(old) ls[ed.i]=Object.assign({},old,it); else ls.push(it);
+    await saveEntry(Object.assign({},d,{horsLots:ls})); S.hcEd=null; toast(L('Enregistré : ','Guardado: ')+lot+'.'); re(); }; }
 /* ===== Automatismes après chaque enregistrement ===== */
 async function autoAfterSave(list){ const ids=new Set(list.filter(e=>e&&e.type==='sortie').map(e=>e.chauffeId)); for(const id of ids) await autoSortie(id); }
 async function autoSortie(cid){ const c=liveChauffes().find(x=>x.id===cid); if(!c||!(c.lots||[]).length) return;
@@ -3212,6 +3257,7 @@ function tabPlantation(ch, body){
   body.innerHTML=`
     <div class="plviews" id="pl-views">${[['terrain',L('Terrain','Terreno')],['lots',L('Lots','Lotes')],['inter',L('Travaux','Trabajos')]].map(([k,t])=>`<button type="button" data-v="${k}" aria-pressed="${V===k}">${esc(t)}</button>`).join('')}</div>
     <div ${V!=='terrain'?'hidden':''} id="pp-wrap">${ppCardHTML(ch)}</div>
+    <div ${V!=='terrain'?'hidden':''} id="hc-wrap">${hcFoldHTML(ch)}</div>
     <div ${V!=='terrain'?'hidden':''} id="ppi-wrap">${ppiFoldHTML(ch)}</div>
     <div ${V!=='lots'?'hidden':''}>
     <p class="note" hidden>${esc(L("Après l'acclimatation, les plants sont plantés en pépinière. Les étapes clés sont en haut : tu peux en ajouter (buttage, arrachage…) avec une date prévue. Note ici la plantation de chaque lot, puis tout ce qui est fait sur les parcelles : arrosages, engrais, traitements, travail du sol, désherbage, ébourgeonnage… Tout va dans le registre PDF.","Después de la aclimatación, las plantas se plantan en el vivero. Las etapas clave están arriba: puedes agregar otras (aporque, arranque…) con una fecha prevista. Anota aquí la plantación de cada lote y luego todo lo que se hace en las parcelas: riegos, fertilizantes, tratamientos, trabajo del suelo, desmalezado, desbrote… Todo va al registro PDF."))}</p>
@@ -3241,7 +3287,7 @@ function tabPlantation(ch, body){
     ${allDates.length?`<details class="gsec"${S.plHist?' open':''} id="pl-hist"><summary>${esc(L('Historique de toutes les interventions','Historial de todas las intervenciones'))} (${ops.length+plPhytos(ch).length})</summary><div class="gsecb">${allDates.map(d=>`<button type="button" class="item plhd" data-d="${d}"><div class="hhead"><span class="d">${esc(dayLabel({debut:d},1))} ${esc(d.slice(0,4))}</span><span class="mono">${ops.filter(e=>e.date===d).length+plPhytos(ch).filter(e=>e.date===d).length}</span></div><div class="rem">${esc(ops.filter(e=>e.date===d).map(plOpLine).concat(plPhytos(ch).filter(e=>e.date===d).map(e=>'🧪 '+phytoLine(e))).join(' · '))}</div></button>`).join('')}</div></details>`:''}
     </div>`;
   document.querySelectorAll('#pl-views button').forEach(b=>b.onclick=()=>{ S.plView=b.dataset.v; renderChauffe(); window.scrollTo({top:0}); });
-  bindSteps(ch,'plant'); try{ bindPP(ch); }catch(e){ console.error(e); } try{ ppiMount(ch); }catch(e){ console.error(e); }
+  bindSteps(ch,'plant'); try{ bindPP(ch); }catch(e){ console.error(e); } try{ ppiMount(ch); }catch(e){ console.error(e); } try{ bindHC(ch); }catch(e){ console.error(e); }
   // --- lots
   const el=$('pl-list'); const all=lots.map(l=>({lot:String(l.lot), variete:l.variete, pg:l.pg, qte:l.qte}));
   if(ed && !all.some(l=>l.lot===String(ed.lot))) all.push({lot:String(ed.lot)});
@@ -3375,16 +3421,22 @@ const ppChargeEnts=(ch,date)=>[].concat(...ppGroup(ch).map(c=>entriesOf(c.id,'pl
 const ppChargeLots=(ch,date)=>{ const out=[]; ppChargeEnts(ch,date).forEach(e=>(e.lots||[]).forEach(x=>{ const k=ppK(x.c||e.chauffeId,String(x.lot)); if(!out.some(y=>y.k===k)) out.push({k, lot:String(x.lot), c:x.c||e.chauffeId, px:x.px}); })); return out; };
 const ppCharge=(ch,date)=>{ const ls=ppChargeLots(ch,date); return ls.length?{lots:ls}:null; };
 const ppLotInfo=(ch,lot)=>(ch.lots||[]).find(l=>String(l.lot)===String(lot))||{};
-const ppSai=c=>{ const ch=liveChauffes().find(x=>x.id===c); return ch?ch.nom:''; };
+const ppSai=c=>{ const ch=liveChauffes().find(x=>x.id===c); return ch?ch.nom:String(c).startsWith('dossier:')?L('Hors chauffe','Fuera de calefacción'):''; };
 const ppShort=nom=>{ const w=String(nom||'').trim().split(/\s+/).filter(Boolean); if(!w.length) return '?'; return w.map(x=>/^\d/.test(x)?x:x[0].toUpperCase()).join('').slice(0,6); };
 /* Tous les lots des saisons du groupe : [{k, lot, c, l, sai}] */
 const ppLotCmp=(a,b)=>String(a.lot).localeCompare(String(b.lot),undefined,{numeric:true});
-function ppAllLots(ch){ return [].concat(...ppGroup(ch).slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),undefined,{numeric:true})).map(c=>(c.lots||[]).slice().sort(ppLotCmp).map(l=>({k:ppK(c.id,String(l.lot)), lot:String(l.lot), c:c.id, l, sai:c.nom})))); }
+function ppAllLots(ch){ const A=[].concat(...ppGroup(ch).slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),undefined,{numeric:true})).map(c=>(c.lots||[]).slice().sort(ppLotCmp).map(l=>({k:ppK(c.id,String(l.lot)), lot:String(l.lot), c:c.id, l, sai:c.nom}))));
+  const H=ppHC(ch); if(H) H.lots.forEach(l=>A.push({k:ppK(H.id,String(l.lot)), lot:String(l.lot), c:H.id, l, sai:H.nom, hc:true})); return A; }
+/* Plants hors chauffe de la saison : vignes mères, repiqués, variétés non greffées cette année (sur l'entrée « saison ») */
+const HC_CATS=[['vm','🌳',['Vigne mère','Planta madre']],['rep','🌱',['Repiqué','Repicado']],['aut','🍇',['Autre variété (pas greffée cette année)','Otra variedad (no injertada este año)']]];
+const hcCat=k=>HC_CATS.find(x=>x[0]===k)||HC_CATS[2];
+const hcCatTxt=k=>{ const c=hcCat(k); return c[1]+' '+L(c[2][0],c[2][1]).replace(/ \(.*\)$/,''); };
+function ppHC(ch){ const d=ch&&ch.dossier?dossiersAll().find(x=>x.id===ch.dossier):null; if(!d) return null; const ls=(d.horsLots||[]).filter(l=>l&&l.lot); return ls.length?{id:d.id, nom:L('Hors chauffe','Fuera de calefacción'), lots:ls, d}:null; }
 function ppLab(ch){ const multi=ppGroup(ch).length>1; const AL=ppAllLots(ch); const cnt={}; AL.forEach(x=>cnt[x.lot]=(cnt[x.lot]||0)+1);
   const by={}; AL.forEach(x=>by[x.k]=x);
   return { multi,
     chip:k=>{ const {c,lot}=ppKs(k); return cnt[lot]>1?lot+'·'+ppShort(ppSai(c)):lot; },
-    info:k=>{ const x=by[k]; const {c}=ppKs(k); const l=x?x.l:{}; return [multi?(x?x.sai:ppSai(c)):'', [l.variete,l.pg].filter(Boolean).join(' / ')].filter(Boolean).join(' · '); },
+    info:k=>{ const x=by[k]; const {c}=ppKs(k); const l=x?x.l:{}; return [x&&x.hc?hcCatTxt(l.cat):multi?(x?x.sai:ppSai(c)):'', [l.variete,l.pg].filter(Boolean).join(' / ')].filter(Boolean).join(' · '); },
     l:k=>(by[k]||{}).l||{} }; }
 function ppColors(ch){ const ks=[...new Set([].concat(...ppAllPass(ch).map(p=>[].concat(...(p.b||[]).map(q=>(q||[]).map(x=>ppXK(x,p)))))).concat(ppAllLots(ch).map(x=>x.k)))];
   const used=new Set(ppAllPass(ch).length?[].concat(...ppAllPass(ch).map(p=>[].concat(...(p.b||[]).map(q=>(q||[]).map(x=>ppXK(x,p)))))):[]);
@@ -3405,7 +3457,7 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
   const pass=parc?ppPass(ch,parc):[]; const cur=pass.find(e=>e.id===S.ppCur)||pass[pass.length-1]; if(!S.ppSel) S.ppSel=[true,true,true];
   const loadedL=ppChargeLots(ch,D); const col=ppColors(ch); const chip=k=>`<span class="pplot" style="background:${col[k]||'var(--accent)'}">${esc(LB.chip(k))}</span>`;
   const plE=k=>{ const {c,lot}=ppKs(k); return plLotOf({id:c},lot); };
-  const groups=ppGroup(ch).filter(c=>(c.lots||[]).length);
+  const groups=ppGroup(ch).filter(c=>(c.lots||[]).length).concat(ppHC(ch)?[ppHC(ch)]:[]);
   const dateTxt=D===todayIso()?L("Aujourd'hui","Hoy"):dayLabel({debut:D},1);
   // 1) première fois : nom de la parcelle, rien d'autre
   if(!parc||S.ppNewParc) return `<div class="card ppcard" id="pp-card"><h3 style="margin:0">${esc(L('Nouvelle parcelle','Nueva parcela'))}</h3>
@@ -3420,7 +3472,7 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
   const chForm=S.ppCharge===ch.id;
   const AO=AL.filter(x=>!plFini(plE(x.k)));
   const remForm=chForm?`<div class="card" style="gap:8px;background:var(--sunk)" id="pc-form"><b>${esc(L('Sur la remorque','En el remolque'))}</b><p class="hint" style="margin:0">${esc(L('Touche un lot pour le mettre ou l\'enlever. Les palox sont facultatifs.','Toca un lote para ponerlo o quitarlo. Los palox son opcionales.'))}</p>
-      ${groups.slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),undefined,{numeric:true})).map(c=>{ const ls=AO.filter(x=>x.c===c.id); if(!ls.length) return ''; return `${LB.multi?`<div class="small" style="font-weight:700;margin-top:4px">${esc(c.nom)}</div>`:''}<div class="pcl">${ls.map(a=>{ const x=loadedL.find(y=>y.k===a.k); return `<div class="pcrow2"><button type="button" class="pctog" data-k="${esc(a.k)}" aria-pressed="${!!x}"><span class="pcbox">${x?'✓':''}</span><b>${esc(a.lot)}</b><span>${esc([a.l.variete,a.l.pg].filter(Boolean).join(' / '))}</span></button>${x?`<input class="num" data-px="${esc(a.k)}" inputmode="decimal" placeholder="palox" value="${x.px!=null?esc(fmtN(x.px)):''}">`:''}</div>`; }).join('')}</div>`; }).join('')||`<p class="hint" style="margin:0">${esc(L('Tous les lots sont finis.','Todos los lotes están terminados.'))}</p>`}
+      ${groups.slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),undefined,{numeric:true})).map(c=>{ const ls=AO.filter(x=>x.c===c.id); if(!ls.length) return ''; return `${LB.multi||groups.length>1?`<div class="small" style="font-weight:700;margin-top:4px">${esc(c.nom)}</div>`:''}<div class="pcl">${ls.map(a=>{ const x=loadedL.find(y=>y.k===a.k); return `<div class="pcrow2"><button type="button" class="pctog" data-k="${esc(a.k)}" aria-pressed="${!!x}"><span class="pcbox">${x?'✓':''}</span><b>${esc(a.lot)}</b><span>${esc([a.l.variete,a.l.pg].filter(Boolean).join(' / '))}</span></button>${x?`<input class="num" data-px="${esc(a.k)}" inputmode="decimal" placeholder="palox" value="${x.px!=null?esc(fmtN(x.px)):''}">`:''}</div>`; }).join('')}</div>`; }).join('')||`<p class="hint" style="margin:0">${esc(L('Tous les lots sont finis.','Todos los lotes están terminados.'))}</p>`}
       <div class="row"><button class="primary" type="button" id="pc-x">${esc(L('Fermer','Cerrar'))}</button>${loadedL.length?`<button class="ghost" type="button" id="pc-clear">${esc(L('Vider la remorque','Vaciar el remolque'))}</button>`:''}</div></div>`:'';
   // 3) le passage
   let field;
@@ -3437,7 +3489,7 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
       ${(()=>{ const bs=[0,1,2].map(i=>ppButte(cur,i)); const os=ppObst(ch,parc).filter(o=>bs.some(b=>b>=o.b1&&b<=o.b2)); return os.length?`<div class="ppobw">${os.map(o=>`<div>⚠️ ${esc(obTxt(o))}</div>`).join('')}</div>`:''; })()}
       <div class="ppbuttes">${[0,1,2].map(i=>{ const seq=(cur.b||[])[i]||[]; return `<button type="button" class="ppb" data-i="${i}" aria-pressed="${!!sel[i]}"><small>${esc(L('Butte ','Camellón ')+ppButte(cur,i))}</small><span>${seq.length?seq.map(x=>chip(ppXK(x,cur))).join('<i>→</i>'):'<em>?</em>'}</span></button>`; }).join('')}</div>
       <div class="pptarget">${esc(L('Touche le lot planté sur ','Toca el lote plantado en ')+target)}${nSel<3?` <button class="linkbtn" type="button" id="pp-all">${esc(L('les 3','los 3'))}</button>`:''}</div>
-      <div class="pplots">${lotBtns.map(k=>`<button type="button" class="pplb" data-k="${esc(k)}" style="--c:${col[k]||'var(--accent)'}"><b>${esc(LB.chip(k))}</b><small>${esc(LB.info(k))}</small></button>`).join('')}${others.length?`<select id="pp-other" class="ppother"><option value="">${esc(L('Autre…','Otro…'))}</option>${groups.map(c=>{ const o=others.filter(x=>x.c===c.id).map(x=>`<option value="${esc(x.k)}">${esc(x.lot+(x.l.variete?' · '+x.l.variete:''))}</option>`).join(''); return o?(LB.multi?`<optgroup label="${esc(c.nom)}">${o}</optgroup>`:o):''; }).join('')}</select>`:''}</div>
+      <div class="pplots">${lotBtns.map(k=>`<button type="button" class="pplb" data-k="${esc(k)}" style="--c:${col[k]||'var(--accent)'}"><b>${esc(LB.chip(k))}</b><small>${esc(LB.info(k))}</small></button>`).join('')}${others.length?`<select id="pp-other" class="ppother"><option value="">${esc(L('Autre…','Otro…'))}</option>${groups.map(c=>{ const o=others.filter(x=>x.c===c.id).map(x=>`<option value="${esc(x.k)}">${esc(x.lot+(x.l.variete?' · '+x.l.variete:''))}</option>`).join(''); return o?(LB.multi||groups.length>1?`<optgroup label="${esc(c.nom)}">${o}</optgroup>`:o):''; }).join('')}</select>`:''}</div>
       ${(()=>{ const one=sel.filter(Boolean).length===1?sel.findIndex(Boolean):-1; if(one<0) return ''; const seq=(cur.b||[])[one]||[]; if(!seq.length) return '';
         return `<div class="ppdelrow"><span class="small">${esc(L('Butte ','Camellón ')+ppButte(cur,one)+' :')}</span>${seq.map((x,k)=>`<button type="button" class="ghost ppdelx" data-i="${one}" data-k="${k}">${chip(ppXK(x,cur))} 🗑</button>`).join('')}</div>`; })()}
       <div class="ppact"><button class="ghost" type="button" id="pp-undo">↶ ${esc(L('Annuler','Deshacer'))}</button><button class="primary" type="button" id="pp-next">${esc(isLast?L('Passage suivant →','Pasada siguiente →'):L('Fini, revenir →','Listo, volver →'))}</button></div>
