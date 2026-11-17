@@ -541,6 +541,19 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .frlots{display:grid;gap:4px}.frl{display:grid;grid-template-columns:minmax(70px,auto) 1fr auto;gap:8px;align-items:baseline;padding:6px 0;border-top:1px solid var(--line);font-size:15px}.frl:first-child{border-top:0}
 .frl span{color:var(--muted);font-size:13.5px}.frl .frdays{color:var(--fg);font-weight:700;font-size:15px}
 .frstat{display:grid;gap:6px;font-size:15px;background:var(--sunk);border-radius:10px;padding:8px 10px}.frstat .bad{color:var(--bad);font-weight:700}.frstat small{color:var(--muted)}
+.ddbtns{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.hgrp{display:grid;gap:8px;border:1.5px solid var(--line);border-radius:12px;padding:10px}.hgh{font-size:16px}
+.hdose{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:14px}.hdose .num{width:74px}
+.hlot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;border-top:1px solid var(--line);padding-top:8px}.hlot .num{width:80px}
+.hres{font-size:14.5px;background:var(--sunk);border-radius:10px;padding:8px 10px;display:grid;gap:3px}.hres:empty{display:none}.hfill{color:var(--muted);font-size:13.5px}
+.htot{font-size:15.5px}.dbox .hst{color:var(--accent,#6a4)}
+#ppi-wrap{margin-top:10px}
+.ppiopts{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.ppipv{overflow:auto}
+.ppimap{display:grid;gap:6px}.ppimr{display:grid;grid-template-columns:minmax(120px,1fr) 2fr;gap:8px;align-items:center}.ppimr select{min-width:0}
+.ppil{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}.ppil b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppisw{display:inline-block;width:16px;height:16px;border-radius:4px;border:1px solid var(--line);flex:none;background:repeating-linear-gradient(45deg,#fff 0 3px,#ddd 3px 6px)}
+@media (max-width:520px){.ppimr{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -561,7 +574,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.81.0';
+const APP_VERSION = '2.83.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1265,6 +1278,7 @@ function tousDetHTML(x){ const c=x.c, lot=String(x.l.lot); const items=[];
   const de=entriesOf(c.id,'decaisse').find(z=>String(z.lot)===lot); if(de) items.push({d:de.dDeb, t:L('Décaissé','Desencajonado')+(de.pDec!=null?' : '+fmtN(de.pDec)+' px':'')+(de.pRem!=null?' → '+fmtN(de.pRem)+L(' re-remplis',' rellenados'):'')+(de.cire===true?L(' · cire',' · cera'):''), del:'e:'+de.id});
   const pe=plLotOf(c,lot); if(pe) items.push({d:pe.date, t:(plFini(pe)?L('Planté (fini)','Plantado (terminado)'):L('Plantation commencée','Plantación empezada'))+(pe.terrain?L(' · noté sur le terrain',' · anotado en el terreno'):''), del:pe.terrain?null:'e:'+pe.id, tog:pe.id, fini:plFini(pe)});
   const bi=bilanOf(c.id,lot); if(bi) items.push({d:bi.dateTri||'', t:L('Trié','Seleccionado')+(bilanRate(bi)!=null?' : '+pct(bilanRate(bi)):''), del:'e:'+bi.id});
+  horOfLot(c,lot).forEach(e=>items.push({d:e.date, t:'🧪 '+L('Hormoné ','Hormonado ')+fmtN(e.px)+' px · '+(e.pg||'')+' · '+fmtN(e.solL)+L(' L de solution',' L de solución')+' ('+fmtN(e.g)+' g)', del:'e:'+e.id}));
   covEnts(c).filter(e=>(e.lots||[]).map(String).includes(lot)).forEach(e=>items.push({d:(e.dt||'').slice(0,10), t:'🧣 '+(e.act==='on'?L('Remis : ','Puesto: '):L('Retiré : ','Retirado: '))+covWhat(e.quoi)+(e.dt&&e.dt.length>10?' ('+e.dt.slice(11,16)+')':''), del:'e:'+e.id}));
   lotNotes(c,lot).forEach(n=>items.push({d:n.date, t:'📝 '+n.texte, sub:n.auteurNom, del:'n:'+n.id}));
   items.sort((a,b)=>(a.d||'').localeCompare(b.d||''));
@@ -1374,20 +1388,23 @@ function tabDecDos(ch, body, grp){ const T=todayIso(); const all=dosLots(grp); c
   // palox par jour, toute la saison
   const byDay={}; all.forEach(x=>{ const J=decJours(x.c,decEnt(x.c,x.l.lot)); Object.keys(J).forEach(d=>{ const o=byDay[d]=byDay[d]||{px:0,rm:0,lots:[]}; o.px+=J[d].px; o.rm+=J[d].rm||0; o.lots.push(x.l.lot+(grp.length>1?' ('+ppShort(x.c.nom)+')':'')+' '+fmtN(J[d].px)); }); });
   const days=Object.keys(byDay).sort().reverse(); const tday=byDay[T];
-  body.innerHTML=`<p class="note">${esc(L("Chaque jour de décaissage : touche les lots travaillés, puis « Noter la journée » et mets les palox du jour. Un lot fait sur plusieurs jours garde le détail jour par jour.","Cada día de desencajonado: toca los lotes trabajados, luego « Anotar el día » y pon los palox del día. Un lote hecho en varios días guarda el detalle día por día."))}</p>
+  body.innerHTML=`<p class="note">${esc(L("Avant de décaisser : touche les lots, puis « 🧪 Hormoner » pour calculer la solution et la noter. ","Antes de desencajonar: toca los lotes y luego « 🧪 Hormonar » para calcular la solución y anotarla. "))}${esc(L("Chaque jour de décaissage : touche les lots travaillés, puis « Noter la journée » et mets les palox du jour. Un lot fait sur plusieurs jours garde le détail jour par jour.","Cada día de desencajonado: toca los lotes trabajados, luego « Anotar el día » y pon los palox del día. Un lote hecho en varios días guarda el detalle día por día."))}</p>
     <div class="hint">${esc(done.length+' / '+all.length+L(' lots finis',' lotes terminados')+(cours.length?' · '+cours.length+L(' en cours',' en curso'):'')+(tday?' · '+L("aujourd'hui : ","hoy: ")+fmtN(Math.round(tday.px*100)/100)+L(' palox décaissés, ',' palox vaciados, ')+fmtN(Math.round(tday.rm*100)/100)+L(' re-remplis',' rellenados'):''))}</div>
     <div class="tlfil" id="dd-f">${[['todo',L('À faire / en cours','Por hacer / en curso'),todo.length+cours.length],['done',L('Finis','Terminados'),done.length],['all',L('Tous','Todos'),all.length]].map(([k,t,n])=>`<button type="button" data-v="${k}" aria-pressed="${fil===k}">${esc(t)} <small>${n}</small></button>`).join('')}</div>
-    ${form?decDosFormHTML(all.filter(x=>sel.has(x.k))):''}
-    <div class="dgrid" id="dd-grid">${vis.map(y=>dosLotBox(grp,y.x.c,y.x.l,`<small class="dst${y.k==='done'?' ok':''}">${esc(y.t)}</small>${y.multi?`<small>${esc(y.days)}</small>`:''}`,sel.has(y.x.k),y.wait)).join('')||`<span class="hint">${esc(L('Aucun lot ici.','Ningún lote aquí.'))}</span>`}</div>
+    ${form?decDosFormHTML(all.filter(x=>sel.has(x.k))):S.dosHor?horFormHTML(all.filter(x=>sel.has(x.k))):''}
+    <div class="dgrid" id="dd-grid">${vis.map(y=>{ const H=horOfLot(y.x.c,y.x.l.lot); const hp=H.reduce((a,e)=>a+(Number(e.px)||0),0); return dosLotBox(grp,y.x.c,y.x.l,`<small class="dst${y.k==='done'?' ok':''}">${esc(y.t)}</small>${y.multi?`<small>${esc(y.days)}</small>`:''}${H.length?`<small class="hst">🧪 ${esc(fmtN(hp)+' px · '+d5(H[H.length-1].date))}</small>`:''}`,sel.has(y.x.k),y.wait); }).join('')||`<span class="hint">${esc(L('Aucun lot ici.','Ningún lote aquí.'))}</span>`}</div>
     ${days.length?fold('decjours', esc(L('Palox décaissés par jour','Palox vaciados por día')), String(days.length), `<div class="apday">${days.map(d=>`<div class="apdl" style="grid-template-columns:52px 1fr"><span class="mono">${esc(d5(d))}</span><span><b>${esc(fmtN(Math.round(byDay[d].px*100)/100))} → ${esc(fmtN(Math.round(byDay[d].rm*100)/100))} px</b><br><small class="hint">${esc(L('lots ','lotes ')+byDay[d].lots.join(', '))}</small></span></div>`).join('')}</div>`):''}
-    <div style="height:${sel.size&&!form?110:10}px"></div>
-    ${sel.size&&!form?`<div class="tlact"><div class="tlactin"><div class="tlacth"><b>${esc(plural(sel.size,'lot choisi','lots choisis','lote elegido','lotes elegidos'))}</b><button class="linkbtn" type="button" id="dd-clear">${esc(L('Vider','Vaciar'))}</button></div><button class="primary big" type="button" id="dd-go">${esc(L('Noter la journée de décaissage','Anotar el día de desencajonado'))}</button></div></div>`:''}
+    ${horHistHTML(grp)}
+    <div style="height:${sel.size&&!form&&!S.dosHor?120:10}px"></div>
+    ${sel.size&&!form&&!S.dosHor?`<div class="tlact"><div class="tlactin"><div class="tlacth"><b>${esc(plural(sel.size,'lot choisi','lots choisis','lote elegido','lotes elegidos'))}</b><button class="linkbtn" type="button" id="dd-clear">${esc(L('Vider','Vaciar'))}</button></div><div class="ddbtns"><button class="ghost big" type="button" id="dd-hor">🧪 ${esc(L('Hormoner','Hormonar'))}</button><button class="primary big" type="button" id="dd-go">${esc(L('Noter la journée de décaissage','Anotar el día de desencajonado'))}</button></div></div></div>`:''}
     <details class="gsec" style="margin-top:10px"><summary>${esc(L('Place dans la chambre, acclimatation dehors : ','Lugar en la cámara, aclimatación afuera: ')+ch.nom)}</summary><div class="gsecb"><button class="ghost" type="button" id="d-decdet">${esc(L('Ouvrir le décaissage détaillé de ','Abrir el desencajonado detallado de ')+ch.nom)}</button></div></details>`;
   const re=()=>{ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); };
   $('dd-f').querySelectorAll('button').forEach(b=>b.onclick=()=>{ S.dosDecF=b.dataset.v; re(); });
-  body.querySelectorAll('#dd-grid .dbox').forEach(b=>b.onclick=()=>{ if(form) return; const k=b.dataset.k; sel.has(k)?sel.delete(k):sel.add(k); re(); });
+  body.querySelectorAll('#dd-grid .dbox').forEach(b=>b.onclick=()=>{ if(form||S.dosHor) return; const k=b.dataset.k; sel.has(k)?sel.delete(k):sel.add(k); re(); });
   if($('dd-clear')) $('dd-clear').onclick=()=>{ sel.clear(); re(); };
   if($('dd-go')) $('dd-go').onclick=()=>{ S.dosDec=true; S.decD=T; renderChauffe(); window.scrollTo({top:0}); };
+  if($('dd-hor')) $('dd-hor').onclick=()=>{ S.dosHor=true; S.horD=T; S.horPg=null; renderChauffe(); window.scrollTo({top:0}); };
+  if(S.dosHor&&!form) bindHorForm(all.filter(x=>sel.has(x.k))); bindHorHist();
   $('d-decdet').onclick=()=>{ S.dosDet='dec'; renderChauffe(); window.scrollTo({top:0}); };
   if(form) bindDecDosForm(all.filter(x=>sel.has(x.k)));
 }
@@ -1459,6 +1476,7 @@ function entryText(e, grp){ const c=grp.find(x=>x.id===e.chauffeId); const cn=gr
     case 'plpass': return '🌱 '+L('Passage ','Pasada ')+e.n+' · '+e.parc;
     case 'plcharge': return '🚜 '+L('Remorque : ','Remolque: ')+(e.lots||[]).map(x=>x.lot).join(', ');
     case 'plantop': case 'phyto': return '💧 '+(e.kind||e.produit||L('Intervention','Intervención'))+(e.remarque?' : '+e.remarque:'')+cn;
+    case 'hormone': return '🧪 '+L('Hormonage ','Hormonado ')+lot+' · '+(e.pg||'')+' · '+fmtN(e.px)+' px · '+fmtN(e.solL)+L(' L de solution',' L de solución')+' ('+fmtN(e.g)+' g)'+cn;
     case 'chcov': return '🧣 '+(e.act==='on'?L('Remis : ','Puesto: '):L('Retiré : ','Retirado: '))+covWhat(e.quoi)+' · '+((e.lots||[]).length>1?L('lots ','lotes '):L('lot ','lote '))+(e.lots||[]).join(', ')+cn;
     case 'frigoeau': return '💧 '+(e.change?L('Eau du frigo changée','Agua del frigorífico cambiada'):e.etat==='pue'?L("L'eau du frigo pue",'El agua del frigorífico huele mal'):L('Eau du frigo bonne','Agua del frigorífico bien'))+cn;
     case 'bilan': return '🔍 '+L('Triage ','Selección ')+lot+(bilanRate(e)!=null?' : '+pct(bilanRate(e)):'')+cn;
@@ -1602,6 +1620,243 @@ function bindFrigoEau(ch){ const re=()=>{ const y=window.scrollY; renderChauffe(
     toast(k==='change'?L('Eau changée : noté.','Agua cambiada: anotado.'):k==='pue'?L("Noté : l'eau pue.",'Anotado: el agua huele mal.'):L('Noté : eau bonne.','Anotado: agua bien.')); re(); });
   document.querySelectorAll('[data-fedel]').forEach(b=>{ let armed=false; b.onclick=async()=>{ if(!armed){ armed=true; b.textContent=L('Supprimer ?','¿Eliminar?'); b.classList.add('arm'); setTimeout(()=>{ armed=false; if(b.isConnected){ b.textContent='🗑'; b.classList.remove('arm'); } },3000); return; }
     const e=S.entrees.find(x=>x.id===b.dataset.fedel); if(e) await saveEntry(Object.assign({},e,{supprime:true})); re(); }; }); }
+/* ===== Hormonage avant décaissage =====
+   Solution mère : 2 g d'hormone par litre (alcool + eau). Dose par porte-greffe en « L de solution pour N L d'eau ».
+   Bain : 20 L par palox de plants, cuve de 700 L maximum. Entrée 'hormone' par lot. */
+const HOR_DEF={conc:2, bain:20, cuve:700, doses:{P1103:[1,1000], SO4:[1.5,600], '5BB':[3,600], R110:[3,600]}};
+function horOpt(){ if(!S.hor){ let o=null; try{ o=JSON.parse(localStorage.getItem(LS+'hormone')||'null'); }catch(e){} S.hor=Object.assign(JSON.parse(JSON.stringify(HOR_DEF)), o||{}); S.hor.doses=Object.assign({},HOR_DEF.doses,(o&&o.doses)||{}); } return S.hor; }
+function horSave(){ try{ localStorage.setItem(LS+'hormone',JSON.stringify(S.hor)); }catch(e){} }
+function horPg(pg){ const t=String(pg||'').toUpperCase().replace(/[\s.\-_]/g,''); if(!t) return ''; if(/1103/.test(t)) return 'P1103'; if(/SO4/.test(t)) return 'SO4'; if(/5BB/.test(t)) return '5BB'; if(/R110|110R/.test(t)) return 'R110'; return t; }
+const horEnts=c=>entriesOf(c.id,'hormone').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+const horOfLot=(c,lot)=>horEnts(c).filter(e=>String(e.lot)===String(lot));
+const r2=v=>Math.round(v*100)/100, r1=v=>Math.round(v*10)/10;
+function horCalc(px,dose,o){ const eau=px*o.bain; const n=eau>0?Math.ceil(eau/o.cuve):0; const eauF=n?eau/n:0; const ratio=dose&&dose[1]>0?dose[0]/dose[1]:0; const sol=eau*ratio;
+  return {eau, n, eauF, solF:eauF*ratio, sol, g:sol*o.conc}; }
+function horFormHTML(selL){ const o=horOpt(); const D=S.horD||todayIso(); const grp={};
+  selL.forEach(x=>{ const k=(S.horPg&&S.horPg[x.k])||horPg(x.l.pg)||'?'; (grp[k]=grp[k]||[]).push(x); });
+  const ord=Object.keys(o.doses); const ks=Object.keys(grp).sort((a,b)=>(a==='?')-(b==='?')||((ord.indexOf(a)+1||99)-(ord.indexOf(b)+1||99))||a.localeCompare(b));
+  return `<div class="card tlsheet" style="gap:10px" id="hf"><div class="hhead"><h3 style="margin:0">🧪 ${esc(L('Hormonage','Hormonado'))}</h3><button class="linkbtn" type="button" id="hf-x">${esc(L('Annuler','Cancelar'))}</button></div>
+    <div class="field"><label for="hf-d">${esc(L('Jour','Día'))}</label><input id="hf-d" type="date" value="${esc(D)}"></div>
+    ${ks.map(k=>{ const d=o.doses[k]||[0,600];
+      return `<div class="hgrp" data-g="${esc(k)}"><div class="hgh"><b>${esc(k==='?'?L('Porte-greffe inconnu','Portainjerto desconocido'):k)}</b></div>
+      <div class="hdose"><span>${esc(L('Dose','Dosis'))}</span><input class="num" data-hs="${esc(k)}" inputmode="decimal" value="${esc(fmtN(d[0]))}"><span>${esc(L('L de solution pour','L de solución por'))}</span><input class="num" data-he="${esc(k)}" inputmode="decimal" value="${esc(fmtN(d[1]))}"><span>${esc(L("L d'eau","L de agua"))}</span></div>
+      ${grp[k].map(x=>{ const done=horOfLot(x.c,x.l.lot).reduce((a,e)=>a+(Number(e.px)||0),0); const left=x.l.palox?Math.max(0,r2(Number(x.l.palox)-done)):null;
+        return `<div class="hlot"><span><b>${esc(x.l.lot)}</b> <small class="hint">${esc([x.l.variete,x.l.pg].filter(Boolean).join(' / '))}${done?' · '+L('déjà ','ya ')+fmtN(done)+' px':''}</small></span>
+        ${k==='?'?`<select data-hpg="${esc(x.k)}"><option value="">${esc(L('porte-greffe ?','¿portainjerto?'))}</option>${Object.keys(o.doses).map(p=>`<option>${esc(p)}</option>`).join('')}</select>`:''}
+        <label><input class="num" data-hpx="${esc(x.k)}" data-g="${esc(k)}" inputmode="decimal" value="${left!=null&&left>0?esc(fmtN(left)):''}" placeholder="px"> <small>${esc(L('palox','palox'))}</small></label></div>`; }).join('')}
+      <div class="hres" data-hr="${esc(k)}"></div></div>`; }).join('')}
+    <details class="gsec"><summary>${esc(L('Réglages du bain','Ajustes del baño'))}</summary><div class="gsecb hdose">
+      <span>${esc(L('Bain par palox de plants','Baño por palox de plantas'))}</span><input class="num" id="hf-bain" inputmode="decimal" value="${esc(fmtN(o.bain))}"><span>L</span>
+      <span>${esc(L('Cuve maximum','Estanque máximo'))}</span><input class="num" id="hf-cuve" inputmode="decimal" value="${esc(fmtN(o.cuve))}"><span>L</span>
+      <span>${esc(L('Hormone','Hormona'))}</span><input class="num" id="hf-conc" inputmode="decimal" value="${esc(fmtN(o.conc))}"><span>${esc(L('g par L de solution','g por L de solución'))}</span></div></details>
+    <div class="hres htot" id="hf-tot"></div>
+    <button class="primary big" type="button" id="hf-ok">${esc(L("Enregistrer l'hormonage","Guardar el hormonado"))}</button><div class="status" id="hf-st"></div></div>`; }
+function bindHorForm(selL){ const o=horOpt(); const st=$('hf-st'); const err=t=>{ st.textContent=t; st.className='status err'; };
+  const f=v=>fmtN(r2(v)), fL=v=>fmtN(v>=10?Math.round(v):r2(v)), fS=v=>v>0&&v<1?fmtN(Math.round(v*1000))+' mL':f(v)+' L';
+  const read=()=>{ const v=id=>num($(id).value); ['bain','cuve','conc'].forEach(k=>{ const x=v('hf-'+k); if(x>0) o[k]=x; });
+    const G={}; document.querySelectorAll('#hf [data-hs]').forEach(i=>{ const k=i.dataset.hs; const a=num(i.value), b=num(document.querySelector('#hf [data-he="'+CSS.escape(k)+'"]').value); G[k]={dose:[a>=0?a:0,b>0?b:0], px:0}; if(k!=='?'&&a>=0&&b>0) o.doses[k]=[a,b]; });
+    document.querySelectorAll('#hf [data-hpx]').forEach(i=>{ const g=G[i.dataset.g]; const n=num(i.value); if(g&&n>0) g.px+=n; }); return G; };
+  const draw=()=>{ const G=read(); let tg=0, ts=0;
+    Object.keys(G).forEach(k=>{ const el=document.querySelector('#hf [data-hr="'+CSS.escape(k)+'"]'); if(!el) return; const g=G[k]; const c=horCalc(g.px,g.dose,o);
+      if(!g.px){ el.innerHTML=`<small class="hint">${esc(L('Mets le nombre de palox à hormoner.','Pon el número de palox a hormonar.'))}</small>`; return; }
+      tg+=c.g; ts+=c.sol;
+      el.innerHTML=`<div>${esc(fmtN(g.px)+' palox → '+fL(c.eau)+L(" L d'eau"," L de agua"))} · <b>${esc(fS(c.sol)+L(' de solution',' de solución'))}</b> · ${esc(f(c.g)+L(" g d'hormone"," g de hormona"))}</div>
+        ${c.n>1?`<div class="hfill">${esc(c.n+L(' remplissages de la cuve : ',' llenados del estanque: ')+fL(c.eauF)+L(" L d'eau + "," L de agua + ")+fS(c.solF)+L(' de solution chacun',' de solución cada uno'))}</div>`:`<div class="hfill">${esc(L('Cuve : ','Estanque: ')+fL(c.eauF)+L(" L d'eau + "," L de agua + ")+fS(c.solF)+L(' de solution',' de solución'))}</div>`}`; });
+    $('hf-tot').innerHTML=ts?`<b>${esc(L('Solution à préparer : ','Solución a preparar: ')+fS(ts))}</b> = ${esc(f(tg)+L(" g d'hormone dans "," g de hormona en ")+fS(ts)+L(' (alcool + eau)',' (alcohol + agua)'))}`:''; };
+  document.querySelectorAll('#hf input').forEach(i=>i.oninput=draw); draw();
+  document.querySelectorAll('#hf [data-hpg]').forEach(sl=>sl.onchange=()=>{ S.horPg=S.horPg||{}; S.horPg[sl.dataset.hpg]=sl.value; S.horD=$('hf-d').value; renderChauffe(); window.scrollTo({top:0}); });
+  $('hf-x').onclick=()=>{ S.dosHor=null; renderChauffe(); };
+  $('hf-d').onchange=()=>{ S.horD=$('hf-d').value; };
+  $('hf-ok').onclick=async()=>{ const D=$('hf-d').value; if(!D) return err(L('Indique le jour.','Indica el día.')); const G=read(); horSave(); const out=[];
+    if(document.querySelector('#hf [data-hpg]')) return err(L('Choisis le porte-greffe des lots sans porte-greffe.','Elige el portainjerto de los lotes sin portainjerto.'));
+    for(const x of selL){ const i=document.querySelector('#hf [data-hpx="'+CSS.escape(x.k)+'"]'); if(!i) continue; const n=num(i.value); if(i.value.trim()===''||!(n>0)) continue;
+      const k=i.dataset.g, g=G[k]; const c=horCalc(n,g.dose,o);
+      out.push({id:'hor-'+uid(), type:'hormone', chauffeId:x.c.id, lot:String(x.l.lot), date:D, pg:k, px:n, eauL:r1(c.eau), solL:r2(c.sol), g:r2(c.g), dose:g.dose, conc:o.conc, bain:o.bain, variete:x.l.variete||'', auteurId:S.me.id, auteurNom:S.me.nom, creeLe:nowIso()}); }
+    if(!out.length) return err(L('Mets le nombre de palox hormonés pour au moins un lot.','Pon el número de palox hormonados para al menos un lote.'));
+    try{ await saveEntries(out); }catch(e){ return err(L('Enregistrement impossible.','No se pudo guardar.')); }
+    S.dosHor=null; S.horD=null; S.horPg=null; if(S.dosSel) S.dosSel.clear(); toast(L('Hormonage noté : ','Hormonado anotado: ')+plural(out.length,'lot','lots','lote','lotes')+'.'); renderChauffe(); window.scrollTo({top:0}); }; }
+function horHistHTML(grp){ const E=[]; grp.forEach(c=>horEnts(c).forEach(e=>E.push({e,c}))); if(!E.length) return '';
+  const by={}; E.forEach(y=>{ (by[y.e.date]=by[y.e.date]||[]).push(y); }); const ds=Object.keys(by).sort().reverse();
+  return fold('horhist', '🧪 '+esc(L('Hormonage fait','Hormonado hecho')), String(E.length), `<div class="apday">${ds.map(d=>{ const sol=by[d].reduce((a,y)=>a+(Number(y.e.solL)||0),0), g=by[d].reduce((a,y)=>a+(Number(y.e.g)||0),0);
+    return `<div class="apdl" style="grid-template-columns:52px 1fr"><span class="mono">${esc(isoFr(d).slice(0,5))}</span><span><b>${esc(fmtN(r2(sol))+L(' L de solution · ',' L de solución · ')+fmtN(r2(g))+' g')}</b>${by[d].map(y=>`<br><small>${esc(L('Lot ','Lote ')+y.e.lot+(grp.length>1?' ('+ppShort(y.c.nom)+')':'')+' · '+y.e.pg+' · '+fmtN(y.e.px)+' px · '+fmtN(y.e.solL)+' L')}</small> <button type="button" class="linkbtn hdel" data-id="${esc(y.e.id)}" aria-label="${esc(L('Supprimer','Eliminar'))}">🗑</button>`).join('')}</span></div>`; }).join('')}</div>`); }
+function bindHorHist(){ document.querySelectorAll('.hdel').forEach(b=>{ let armed=false; b.onclick=async()=>{ if(!armed){ armed=true; b.textContent=L('effacer ?','¿borrar?'); setTimeout(()=>{ armed=false; if(b.isConnected) b.textContent='🗑'; },3000); return; }
+  const e=S.entrees.find(x=>x.id===b.dataset.id); if(e) await saveEntry(Object.assign({},e,{supprime:true})); toast(L('Supprimé.','Eliminado.')); const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); }; }); }
+/* ===== Plantation : importer un plan Excel (cases colorées, une colonne ou une ligne = une butte) =====
+   Lit les couleurs de fond et les textes des cases. Une zone de même couleur = un lot ; le numéro écrit dedans dit lequel.
+   Une zone sans numéro garde la couleur : on lui choisit un lot. Les cases blanches sont vides. */
+async function ppiReadXlsx(buf){ const z=await unzipEntries(buf);
+  const shared=[]; const sst=await z.__read('xl/sharedStrings.xml'); if(sst) byTag(xmlDoc(sst),'si').forEach(si=>shared.push(byTag(si,'t').map(t=>t.textContent).join('')));
+  // couleurs du thème (si le fichier en utilise)
+  const theme=[]; try{ const th=await z.__read('xl/theme/theme1.xml'); if(th){ const cs=byTag(xmlDoc(th),'clrScheme')[0]; if(cs) Array.from(cs.children).forEach(el=>{ const s=byTag(el,'srgbClr')[0], y=byTag(el,'sysClr')[0]; theme.push(s?s.getAttribute('val'):y?(y.getAttribute('lastClr')||'000000'):'000000'); }); } }catch(e){}
+  if(theme.length>=4){ const t=theme[0]; theme[0]=theme[1]; theme[1]=t; const u=theme[2]; theme[2]=theme[3]; theme[3]=u; }
+  const IDX=['000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF','000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF','800000','008000','000080','808000','800080','008080','C0C0C0','808080','9999FF','993366','FFFFCC','CCFFFF','660066','FF8080','0066CC','CCCCFF','000080','FF00FF','FFFF00','00FFFF','800080','800000','008080','0000FF','00CCFF','CCFFFF','CCFFCC','FFFF99','99CCFF','FF99CC','CC99FF','FFCC99','3366FF','33CCCC','99CC00','FFCC00','FF9900','FF6600','666699','969696','003366','339966','003300','333300','993300','993366','333399','333333'];
+  const tint=(hex,t)=>{ if(!t) return hex; const v=parseInt(hex,16); let c=[v>>16,(v>>8)&255,v&255]; c=c.map(x=>Math.round(t<0?x*(1+t):x+(255-x)*t)); return c.map(x=>Math.max(0,Math.min(255,x)).toString(16).padStart(2,'0')).join('').toUpperCase(); };
+  const colOf=el=>{ if(!el) return null; const rgb=el.getAttribute('rgb'); if(rgb) return rgb.slice(-6).toUpperCase(); const th=el.getAttribute('theme'); if(th!=null&&theme[+th]) return tint(theme[+th].toUpperCase(), Number(el.getAttribute('tint'))||0); const ix=el.getAttribute('indexed'); if(ix!=null&&IDX[+ix]&&+ix<64) return IDX[+ix]; return null; };
+  const fills=[], xfFill=[]; const st=await z.__read('xl/styles.xml');
+  if(st){ const d=xmlDoc(st); const fl=byTag(d,'fills')[0]; if(fl) Array.from(fl.children).forEach(f=>{ const p=byTag(f,'patternFill')[0]; if(!p||(p.getAttribute('patternType')||'none')==='none'){ fills.push(null); return; } const fg=byTag(p,'fgColor')[0], bg=byTag(p,'bgColor')[0]; fills.push(p.getAttribute('patternType')==='solid'?colOf(fg)||colOf(bg):colOf(fg)||colOf(bg)); });
+    const cx=byTag(d,'cellXfs')[0]; if(cx) Array.from(cx.children).forEach(x=>xfFill.push(fills[Number(x.getAttribute('fillId'))||0]||null)); }
+  const wb=xmlDoc(await z.__read('xl/workbook.xml')); const rels=xmlDoc(await z.__read('xl/_rels/workbook.xml.rels')||'<x/>');
+  const relMap={}; byTag(rels,'Relationship').forEach(r=>relMap[r.getAttribute('Id')]=r.getAttribute('Target'));
+  const sheets=[]; for(const sh of byTag(wb,'sheet')){ const rid=sh.getAttribute('r:id')||sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+    let target=relMap[rid]||''; target=target.replace(/^\//,''); if(!target.startsWith('xl/')) target='xl/'+target; const s=sh.getAttribute('state'); if(s==='hidden'||s==='veryHidden') continue; sheets.push({name:sh.getAttribute('name'), path:target}); }
+  for(const sh of sheets){ const x=await z.__read(sh.path); const cells={}; let R=0, C=0;
+    if(x){ const d=xmlDoc(x);
+      byTag(d,'c').forEach(c=>{ const ref=c.getAttribute('r'); if(!ref) return; const ci=colIndex(ref), ri=Number(ref.replace(/^[A-Z]+/,''))-1; if(ci<0||!(ri>=0)) return;
+        const t=c.getAttribute('t'); const v=byTag(c,'v')[0]; let val=null;
+        if(t==='s'&&v) val=shared[Number(v.textContent)]; else if(t==='inlineStr') val=byTag(c,'t').map(e=>e.textContent).join(''); else if(v) val=v.textContent;
+        if(val!=null&&t!=='s'&&t!=='inlineStr'&&t!=='str'&&isFinite(Number(val))) val=String(Math.round(Number(val)*1000)/1000);
+        const f=xfFill[Number(c.getAttribute('s'))||0]||null; const txt=val==null?'':String(val).trim();
+        if(!txt&&!f) return; cells[ri+','+ci]={v:txt, f}; if(ri+1>R) R=ri+1; if(ci+1>C) C=ci+1; });
+      byTag(d,'mergeCell').forEach(m=>{ const [a,b]=(m.getAttribute('ref')||'').split(':'); if(!a||!b) return; const r0=Number(a.replace(/^[A-Z]+/,''))-1, c0=colIndex(a), r1=Number(b.replace(/^[A-Z]+/,''))-1, c1=colIndex(b); const top=cells[r0+','+c0]; if(!top||!top.f) return;
+        for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){ const k=r+','+c; if(!cells[k]) cells[k]={v:'', f:top.f}; else if(!cells[k].f) cells[k].f=top.f; } }); }
+    sh.cells=cells; sh.R=R; sh.C=C; }
+  return sheets; }
+const ppiWhite=f=>!f||/^(FFFFFF|FEFEFE|FFFFFE)$/i.test(f);
+const ppiCell=(sh,r,c)=>sh.cells[r+','+c]||null;
+const ppiFill=(sh,r,c)=>{ const x=ppiCell(sh,r,c); return x&&!ppiWhite(x.f)?x.f:''; };
+const ppiRef=(r,c)=>xCol(c)+(r+1);
+function ppiParseRef(t){ const m=/^\s*([A-Za-z]+)(\d+)\s*[:\-–]\s*([A-Za-z]+)(\d+)\s*$/.exec(t||''); if(!m) return null; const a={c:colIndex(m[1].toUpperCase()), r:Number(m[2])-1}, b={c:colIndex(m[3].toUpperCase()), r:Number(m[4])-1};
+  return {r0:Math.min(a.r,b.r), r1:Math.max(a.r,b.r), c0:Math.min(a.c,b.c), c1:Math.max(a.c,b.c)}; }
+/* La plus grande tache de cases colorées (trous d'une case tolérés) = le plan */
+function ppiAutoZone(sh){ const pts=Object.keys(sh.cells).filter(k=>!ppiWhite(sh.cells[k].f)); if(!pts.length) return null; const has=new Set(pts), seen=new Set(); let best=null;
+  for(const k0 of pts){ if(seen.has(k0)) continue; const q=[k0]; seen.add(k0); let n=0, r0=1e9,r1=-1,c0=1e9,c1=-1;
+    while(q.length){ const k=q.pop(); n++; const [r,c]=k.split(',').map(Number); r0=Math.min(r0,r); r1=Math.max(r1,r); c0=Math.min(c0,c); c1=Math.max(c1,c);
+      for(let dr=-2;dr<=2;dr++) for(let dc=-2;dc<=2;dc++){ if(!dr&&!dc) continue; const kk=(r+dr)+','+(c+dc); if(has.has(kk)&&!seen.has(kk)){ seen.add(kk); q.push(kk); } } }
+    if(!best||n>best.n) best={n,r0,r1,c0,c1}; }
+  return best; }
+/* Les lots s'étirent le long des buttes : on regarde dans quel sens les couleurs se prolongent le plus */
+function ppiAutoAxis(sh,z){ let v=0,h=0; for(let r=z.r0;r<=z.r1;r++) for(let c=z.c0;c<=z.c1;c++){ const f=ppiFill(sh,r,c); if(!f) continue; if(r<z.r1&&ppiFill(sh,r+1,c)===f) v++; if(c<z.c1&&ppiFill(sh,r,c+1)===f) h++; } return v>=h?'col':'row'; }
+const ppiNorm=t=>String(t||'').toUpperCase().replace(/\s+/g,'').replace(/^LOT(E)?/,'');
+/* Attribution d'une étiquette à chaque case de la zone. ign = textes qui ne sont pas des lots. */
+function ppiAssign(sh,z,ign,axis){ const H=z.r1-z.r0+1, W=z.c1-z.c0+1; const A=Array.from({length:H},()=>Array(W).fill('')); const comp=Array.from({length:H},()=>Array(W).fill(-1));
+  const key=(r,c)=>ppiFill(sh,z.r0+r,z.c0+c); const labels={};
+  let id=0; for(let r=0;r<H;r++) for(let c=0;c<W;c++){ if(comp[r][c]>=0) continue; const k=key(r,c); const cells=[[r,c]]; comp[r][c]=id; const seeds=[];
+    for(let i=0;i<cells.length;i++){ const [y,x]=cells[i]; const cl=ppiCell(sh,z.r0+y,z.c0+x); const t=cl&&cl.v?cl.v:''; if(t&&!ign.has(t)) seeds.push([y,x,t]);
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dy,dx])=>{ const yy=y+dy, xx=x+dx; if(yy<0||xx<0||yy>=H||xx>=W||comp[yy][xx]>=0||key(yy,xx)!==k) return; comp[yy][xx]=id; cells.push([yy,xx]); }); }
+    if(seeds.length){ // la case prend le numéro le plus proche dans sa tache
+      seeds.forEach(s=>A[s[0]][s[1]]=s[2]); const inC=new Set(cells.map(p=>p[0]*W+p[1]));
+      const grow=(q,dirs)=>{ for(let i=0;i<q.length;i++){ const [y,x]=q[i]; dirs.forEach(([dy,dx])=>{ const yy=y+dy, xx=x+dx; if(yy<0||xx<0||yy>=H||xx>=W||!inC.has(yy*W+xx)||A[yy][xx]) return; A[yy][xx]=A[y][x]; q.push([yy,xx]); }); } };
+      // d'abord le long de la butte, puis vers les buttes voisines (bloc écrit une seule fois sur plusieurs buttes)
+      grow(seeds.map(s=>[s[0],s[1]]), axis==='row'?[[0,1],[0,-1]]:[[1,0],[-1,0]]);
+      grow(cells.filter(([y,x])=>A[y][x]), [[1,0],[-1,0],[0,1],[0,-1]]); }
+    else if(k) cells.forEach(([y,x])=>A[y][x]='#'+k);
+    cells.forEach(([y,x])=>{ const l=A[y][x]; if(!l) return; const o=labels[l]=labels[l]||{n:0, cols:{}}; o.n++; if(k) o.cols[k]=(o.cols[k]||0)+1; });
+    id++; }
+  return {A,labels}; }
+/* Buttes dans l'ordre : butte 1 du côté choisi ; chaque butte = liste de cases du début (côté de départ du passage 1) à la fin */
+function ppiButtes(z,A,o){ const H=z.r1-z.r0+1, W=z.c1-z.c0+1; const out=[];
+  if(o.axis==='col'){ const cs=[...Array(W).keys()]; if(o.b1==='droite') cs.reverse(); cs.forEach(c=>{ const line=[]; for(let i=0;i<H;i++){ const r=o.start==='bas'?H-1-i:i; line.push(A[r][c]); } out.push({src:c, line}); }); }
+  else { const rs=[...Array(H).keys()]; if(o.b1==='bas') rs.reverse(); rs.forEach(r=>{ const line=[]; for(let i=0;i<W;i++){ const c=o.start==='droite'?W-1-i:i; line.push(A[r][c]); } out.push({src:r, line}); }); }
+  return out; }
+function ppiAnalyze(ch){ const P=S.ppi; const sh=P.sheets[P.si]; const z=P.zone; if(!sh||!z) return null;
+  const all=ppiAssign(sh,z,new Set(),P.opt.axis); // tous les textes trouvés
+  const AL=ppAllLots(ch); const LBc=ppLab(ch); const byN={}; AL.forEach(x=>{ const n=ppiNorm(x.lot); if(!byN[n]) byN[n]=x.k; }); AL.forEach(x=>{ byN[ppiNorm(LBc.chip(x.k))]=x.k; });
+  Object.keys(all.labels).forEach(l=>{ if(P.map[l]===undefined) P.map[l]=l[0]==='#'?'':(byN[ppiNorm(l)]||'_'); });
+  const ign=new Set(Object.keys(P.map).filter(l=>l[0]!=='#'&&P.map[l]==='_'));
+  const res=ppiAssign(sh,z,ign,P.opt.axis); const lotOf=l=>!l?'':P.map[l]&&P.map[l]!=='_'?P.map[l]:'';
+  const K=res.A.map(row=>row.map(lotOf));
+  const B=ppiButtes(z,K,P.opt); let nb=0; const kept=[];
+  B.forEach(b=>{ const idx=b.line.map((k,i)=>k?i:-1).filter(i=>i>=0); if(!idx.length){ if(P.opt.keepEmpty) { nb++; kept.push(Object.assign(b,{n:nb, segs:[]})); } return; }
+    const a=idx[0], e=idx[idx.length-1], E=e-a+1; const segs=[]; let cur=null;
+    for(let i=a;i<=e;i++){ const k=b.line[i]; if(!k||(cur&&cur.k===k)){ if(cur) cur.z=i; continue; } cur={k, a:i-a, z:i-a}; segs.push(cur); }
+    segs.forEach(s=>s.z=Math.max(s.z,s.a)); nb++; kept.push(Object.assign(b,{n:nb, first:a, E, segs})); });
+  const found=new Set(); kept.forEach(b=>b.segs.forEach(s=>found.add(s.k)));
+  return {labels:all.labels, res, K, buttes:kept, lots:[...found]}; }
+/* Passages de l'appli : passage n = buttes 3n-2 à 3n, aller (impair) depuis le début, retour depuis la fin */
+function ppiSeq(b, aller){ if(!b||!b.segs.length) return []; const E=b.E;
+  const segs=aller?b.segs.map(s=>({k:s.k, f:s.a/E})):b.segs.slice().reverse().map(s=>({k:s.k, f:(E-1-s.z)/E}));
+  return segs.map((s,i)=>{ const {c,lot}=ppKs(s.k); const x={lot, c}; if(i>0) x.f=Math.round(s.f*1000)/1000; return x; }); }
+async function ppiImport(ch){ const P=S.ppi; const R=ppiAnalyze(ch); if(!R||!R.buttes.length) throw new Error(L('Aucune butte à importer.','Ningún camellón para importar.'));
+  const parc=(P.parc==='+new'?P.parcNew:P.parc||'').trim(); if(!parc) throw new Error(L('Indique le nom de la parcelle.','Indica el nombre de la parcela.'));
+  const D=P.date||todayIso(); const exist=ppPass(ch,parc); const N=R.buttes.length; const out=[]; let filled=0, skipped=0;
+  for(let n=1;n<=Math.ceil(N/3);n++){ const aller=n%2===1; const seqs=[0,1,2].map(i=>ppiSeq(R.buttes[(n-1)*3+i], aller));
+    const old=exist.filter(e=>e.n===n); const e0=old[0];
+    if(e0){ const b=[0,1,2].map(i=>((e0.b||[])[i]||[]).slice()); [0,1,2].forEach(i=>{ if(!seqs[i].length) return; if(b[i].length&&P.mode!=='replace'){ skipped++; return; } b[i]=seqs[i]; filled++; });
+      out.push(Object.assign({},e0,{b, importe:true, auteurId:S.me.id, auteurNom:S.me.nom})); }
+    else { if(!seqs.some(s=>s.length)) continue; seqs.forEach(s=>{ if(s.length) filled++; }); out.push({id:'pp-'+uid(), type:'plpass', chauffeId:ch.id, parc, n, date:D, b:seqs, importe:true, creeLe:nowIso(), auteurId:S.me.id, auteurNom:S.me.nom}); } }
+  // réglages de la parcelle : sens du plan comme dans le fichier, longueurs si la taille d'une case est donnée
+  const patch={}; if(P.opt.axis==='col'){ patch.orient='v'; patch.depart=P.opt.b1==='droite'?L('droite','derecha'):L('gauche','izquierda'); }
+  else { patch.orient='h'; patch.first=P.opt.b1==='haut'?'haut':'bas'; patch.hStart=P.opt.start==='droite'?'droite':'gauche'; }
+  const m=num(P.cellM); if(m>0){ const cfg=ppParcCfg(ch,parc).x||{}; const len=Object.assign({},cfg.len||{}), off=Object.assign({},cfg.off||{}); R.buttes.forEach(b=>{ if(!b.segs.length) return; len[b.n]=Math.round(b.E*m*10)/10; if(b.first) off[b.n]=Math.round(b.first*m*10)/10; else delete off[b.n]; }); patch.len=len; patch.off=off; }
+  await ppSetParcCfg(ch,parc,patch);
+  if(out.length){ await saveEntries(out); try{ await ppSync(ch.id); }catch(e){ console.warn(e); } }
+  return {parc, N, filled, skipped}; }
+/* ----- écran d'import ----- */
+function ppiPreviewSVG(ch,R){ const P=S.ppi; const z=P.zone; const H=z.r1-z.r0+1, W=z.c1-z.c0+1; const col=ppColors(ch); const LB=ppLab(ch);
+  const cw=Math.max(3,Math.min(16,Math.floor(720/W))), chh=Math.max(3,Math.min(14,Math.floor(360/H))); const sh=P.sheets[P.si];
+  let g=''; for(let r=0;r<H;r++){ let c=0; while(c<W){ const k=R.K[r][c]; const raw=ppiFill(sh,z.r0+r,z.c0+c); let c2=c; while(c2+1<W&&R.K[r][c2+1]===k&&(k||ppiFill(sh,z.r0+r,z.c0+c2+1)===raw)) c2++;
+      if(k) g+=`<rect x="${c*cw}" y="${r*chh}" width="${(c2-c+1)*cw}" height="${chh}" fill="${col[k]||'#888'}"/>`; else if(raw) g+=`<rect x="${c*cw}" y="${r*chh}" width="${(c2-c+1)*cw}" height="${chh}" fill="#${raw}" opacity=".35"/>`;
+      c=c2+1; } }
+  // étiquettes : une par morceau de butte assez grand
+  const txt=[]; R.buttes.forEach(b=>b.segs.forEach(s=>{ const len=s.z-s.a+1; const mid=b.first+s.a+len/2; let x,y,room;
+    if(P.opt.axis==='col'){ const r=P.opt.start==='bas'?H-mid:mid; x=(b.src+.5)*cw; y=r*chh; room=len*chh>=12&&cw>=9; } else { const c=P.opt.start==='droite'?W-mid:mid; x=c*cw; y=(b.src+.5)*chh; room=len*cw>=18&&chh>=9; }
+    if(room) txt.push(`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" style="font-size:${Math.min(11,Math.max(7,Math.min(cw,chh)))}px;font-weight:700;fill:#fff;paint-order:stroke;stroke:rgba(0,0,0,.55);stroke-width:2px">${esc(LB.chip(s.k))}</text>`); }));
+  // numéros de buttes (quelques-uns)
+  const nums=[]; const step=Math.max(1,Math.ceil(R.buttes.length/30)); R.buttes.forEach((b,i)=>{ if(i%step&&i!==R.buttes.length-1&&i!==0) return; if(P.opt.axis==='col') nums.push(`<text x="${(b.src+.5)*cw}" y="${H*chh+10}" text-anchor="middle" style="font-size:9px;fill:var(--muted)">${b.n}</text>`); else nums.push(`<text x="${W*cw+3}" y="${(b.src+.5)*chh}" dominant-baseline="central" style="font-size:9px;fill:var(--muted)">${b.n}</text>`); });
+  const Wt=W*cw+(P.opt.axis==='row'?26:0), Ht=H*chh+(P.opt.axis==='col'?14:0);
+  return `<svg viewBox="0 0 ${Wt} ${Ht}" width="100%" style="max-height:420px;background:var(--surface);border:1px solid var(--line);border-radius:8px">${g}${txt.join('')}${nums.join('')}</svg>`; }
+function ppiHTML(ch){ const P=S.ppi; const AL=ppAllLots(ch); const LB=ppLab(ch);
+  const pick=`<div class="field"><label for="ppi-file">${esc(L('Fichier Excel du plan (.xlsx)','Archivo Excel del plano (.xlsx)'))}</label><input id="ppi-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>
+    <p class="hint" style="margin:0">${esc(L("Le plan avec une case colorée par morceau de butte et le numéro du lot écrit dans la couleur (comme les plans de Gérard). Depuis Google Sheets : ⋮ → Partager et exporter → Enregistrer sous → Excel (.xlsx), puis choisis le fichier ici.","El plano con una celda de color por trozo de camellón y el número del lote escrito en el color (como los planos de Gérard). Desde Google Sheets: ⋮ → Compartir y exportar → Guardar como → Excel (.xlsx), luego elige el archivo aquí."))}</p>`;
+  if(!P||!P.sheets) return `<div class="card" style="gap:10px" id="ppi">${pick}<div class="status" id="ppi-st"></div></div>`;
+  const R=P.zone?ppiAnalyze(ch):null; const sh=P.sheets[P.si]; const parcs=ppParcs(ch);
+  const seg=(id,v,opts)=>`<div class="seg" id="${id}">${opts.map(([k,t])=>`<button type="button" data-v="${k}" aria-pressed="${v===k}">${esc(t)}</button>`).join('')}</div>`;
+  const ax=P.opt.axis==='col';
+  const labs=R?Object.keys(R.labels).sort((a,b)=>(a[0]==='#')-(b[0]==='#')||a.localeCompare(b,undefined,{numeric:true})):[];
+  const lotOpts=sel=>AL.map(x=>`<option value="${esc(x.k)}"${sel===x.k?' selected':''}>${esc(LB.chip(x.k)+(LB.multi?' · '+x.sai:'')+([x.l.variete,x.l.pg].filter(Boolean).length?' — '+[x.l.variete,x.l.pg].filter(Boolean).join(' / '):''))}</option>`).join('');
+  const sw=o=>Object.entries(o.cols).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([c])=>`<i class="ppisw" style="background:#${c}"></i>`).join('')||'<i class="ppisw"></i>';
+  const nEx=parcs.includes(P.parc)?ppPass(ch,P.parc).length:0;
+  return `<div class="card" style="gap:12px" id="ppi">
+    <div class="hhead"><b>📄 ${esc(P.name)}</b><button class="linkbtn" type="button" id="ppi-x">${esc(L('Autre fichier','Otro archivo'))}</button></div>
+    ${P.sheets.length>1?`<div class="field"><label for="ppi-sh">${esc(L('Feuille','Hoja'))}</label><select id="ppi-sh">${P.sheets.map((s,i)=>`<option value="${i}"${i===P.si?' selected':''}>${esc(s.name)}</option>`).join('')}</select></div>`:''}
+    ${!P.zone?`<p class="status err">${esc(L('Aucune case colorée dans cette feuille.','Ninguna celda de color en esta hoja.'))}</p>`:`
+    <div class="field"><label for="ppi-z">${esc(L('Cases du plan','Celdas del plano'))}</label><input id="ppi-z" type="text" value="${esc(ppiRef(P.zone.r0,P.zone.c0)+':'+ppiRef(P.zone.r1,P.zone.c1))}" autocapitalize="characters"><small class="hint">${esc(L('Trouvé tout seul. Change-le seulement si le plan est mal coupé (ex. : B3:IV28).','Encontrado solo. Cámbialo solo si el plano está mal cortado (ej.: B3:IV28).'))}</small></div>
+    <div class="ppiopts">
+      <div class="field"><span class="lab">${esc(L('Une butte =','Un camellón ='))}</span>${seg('ppi-ax',P.opt.axis,[['col',L('une colonne','una columna')],['row',L('une ligne','una fila')]])}</div>
+      <div class="field"><span class="lab">${esc(L('Butte 1','Camellón 1'))}</span>${seg('ppi-b1',P.opt.b1,ax?[['gauche',L('à gauche','a la izquierda')],['droite',L('à droite','a la derecha')]]:[['bas',L('en bas','abajo')],['haut',L('en haut','arriba')]])}</div>
+      <div class="field"><span class="lab">${esc(L('Le passage 1 part','La pasada 1 parte'))}</span>${seg('ppi-st',P.opt.start,ax?[['bas',L('du bas','de abajo')],['haut',L('du haut','de arriba')]]:[['gauche',L('de gauche','de la izquierda')],['droite',L('de droite','de la derecha')]])}</div>
+    </div>
+    ${R?`<div class="ppipv">${ppiPreviewSVG(ch,R)}</div>
+    <div class="hint">${esc(plural(R.buttes.length,'butte','buttes','camellón','camellones')+' · '+plural(R.lots.length,'lot reconnu','lots reconnus','lote reconocido','lotes reconocidos'))}</div>
+    <div class="ppimap"><span class="lab">${esc(L('Ce qui est écrit dans le plan → lot de l\'appli','Lo que está escrito en el plano → lote de la app'))}</span>
+      ${labs.map(l=>{ const o=R.labels[l]; const v=P.map[l]; const isC=l[0]==='#';
+        return `<div class="ppimr"><span class="ppil">${sw(o)}<b>${esc(isC?L('couleur sans numéro','color sin número'):l)}</b></span><select data-ppim="${esc(l)}">${isC?`<option value=""${!v?' selected':''}>${esc(L('— laisser vide —','— dejar vacío —'))}</option>`:`<option value="_"${v==='_'?' selected':''}>${esc(L('— ce n\'est pas un lot —','— no es un lote —'))}</option>`}${lotOpts(v)}</select></div>`; }).join('')}</div>
+    <div class="two"><div class="field"><label for="ppi-parc">${esc(L('Parcelle','Parcela'))}</label><select id="ppi-parc">${parcs.map(p=>`<option value="${esc(p)}"${P.parc===p?' selected':''}>${esc(p)}</option>`).join('')}<option value="+new"${P.parc==='+new'?' selected':''}>${esc(L('+ Nouvelle parcelle','+ Nueva parcela'))}</option></select>${P.parc==='+new'?`<input id="ppi-pn" type="text" value="${esc(P.parcNew||'')}" placeholder="${esc(L('Nom de la parcelle','Nombre de la parcela'))}" style="margin-top:6px">`:''}</div>
+      <div class="field"><label for="ppi-d">${esc(L('Date de plantation','Fecha de plantación'))}</label><input id="ppi-d" type="date" value="${esc(P.date||todayIso())}"></div></div>
+    <div class="field"><label for="ppi-m">${esc(L('Longueur d\'une case','Largo de una celda'))} <span class="hint">${esc(L('(facult.)','(opc.)'))}</span></label><div class="row" style="align-items:center;gap:6px"><input id="ppi-m" class="num" inputmode="decimal" value="${esc(P.cellM||'')}" placeholder="m" style="width:90px"><span class="small">${esc(L('m — pour mettre la longueur des buttes','m — para poner el largo de los camellones'))}</span></div></div>
+    ${nEx?`<div class="field"><span class="lab">${esc(L('Cette parcelle a déjà des buttes plantées','Esta parcela ya tiene camellones plantados'))}</span>${seg('ppi-mode',P.mode||'empty',[['empty',L('Remplir seulement les buttes vides','Llenar solo los camellones vacíos')],['replace',L('Remplacer par le fichier','Reemplazar con el archivo')]])}</div>`:''}
+    <button class="primary big" type="button" id="ppi-ok">${esc(L('Importer le plan','Importar el plano'))}</button>`:''}`}
+    <div class="status" id="ppi-st"></div></div>`; }
+function ppiFoldHTML(ch){ if(!ppAllLots(ch).length) return ''; return `<details class="gsec" id="ppi-fold"${S.ppiOpen?' open':''}><summary>📥 ${esc(L('Remplir le plan depuis un fichier Excel','Llenar el plano desde un archivo Excel'))}</summary><div class="gsecb" id="ppi-body">${S.ppiOpen?ppiHTML(ch):''}</div></details>`; }
+function ppiMount(ch){ const f=$('ppi-fold'); if(!f) return; f.ontoggle=()=>{ S.ppiOpen=f.open; if(f.open){ $('ppi-body').innerHTML=ppiHTML(ch); bindPPI(ch); } };
+  if(S.ppiOpen) bindPPI(ch); }
+function bindPPI(ch){ const re=()=>{ const b=$('ppi-body'); if(!b) return; const y=window.scrollY; b.innerHTML=ppiHTML(ch); bindPPI(ch); window.scrollTo({top:y}); };
+  const st=$('ppi-st'); const err=t=>{ st.textContent=t; st.className='status err'; }; const P=S.ppi;
+  const setSheet=i=>{ const P=S.ppi; P.si=i; const sh=P.sheets[i]; P.zone=ppiAutoZone(sh); if(P.zone){ P.opt.axis=ppiAutoAxis(sh,P.zone); P.opt.b1=P.opt.axis==='col'?(P.parc&&P.parc!=='+new'&&ppRight(ch,P.parc)?'droite':'gauche'):'bas'; P.opt.start=P.opt.axis==='col'?'bas':'gauche'; } P.map={}; };
+  if($('ppi-file')) $('ppi-file').onchange=async()=>{ const fl=$('ppi-file').files[0]; if(!fl) return; if(typeof DecompressionStream==='undefined') return err(L('Ce navigateur est trop ancien pour lire les fichiers Excel. Mets à jour l\'iPad.','Este navegador es demasiado antiguo para leer archivos Excel. Actualiza el iPad.'));
+    st.textContent=L('Lecture…','Leyendo…'); st.className='status';
+    try{ const sheets=await ppiReadXlsx(await fl.arrayBuffer()); if(!sheets.length) return err(L('Aucune feuille dans ce fichier.','Ninguna hoja en este archivo.'));
+      const parcs=ppParcs(ch); S.ppi={name:fl.name, sheets, si:0, opt:{}, map:{}, parc:S.ppParc&&parcs.includes(S.ppParc)?S.ppParc:(parcs[0]||'+new'), date:todayIso(), mode:'empty'};
+      // la feuille avec le plus grand plan coloré
+      let best=0, bn=-1; sheets.forEach((s,i)=>{ const z=ppiAutoZone(s); if(z&&z.n>bn){ bn=z.n; best=i; } }); setSheet(best); re(); }
+    catch(e){ console.warn(e); err(L('Fichier illisible : enregistre-le bien au format Excel (.xlsx).','Archivo ilegible: guárdalo en formato Excel (.xlsx).')); } };
+  if(!P||!P.sheets) return;
+  $('ppi-x').onclick=()=>{ S.ppi=null; re(); };
+  if($('ppi-sh')) $('ppi-sh').onchange=()=>{ setSheet(Number($('ppi-sh').value)); re(); };
+  if(!P.zone) return;
+  $('ppi-z').onchange=()=>{ const z=ppiParseRef($('ppi-z').value); if(!z) return err(L('Écris les cases comme dans Excel, ex. : B3:IV28.','Escribe las celdas como en Excel, ej.: B3:IV28.')); P.zone=Object.assign({n:0},z); re(); };
+  const segB=(id,k)=>{ const s=$(id); if(s) s.querySelectorAll('button').forEach(b=>b.onclick=()=>{ if(k==='axis'&&P.opt.axis!==b.dataset.v){ P.opt.axis=b.dataset.v; P.opt.b1=b.dataset.v==='col'?'gauche':'bas'; P.opt.start=b.dataset.v==='col'?'bas':'gauche'; } else if(k==='mode') P.mode=b.dataset.v; else P.opt[k]=b.dataset.v; re(); }); };
+  segB('ppi-ax','axis'); segB('ppi-b1','b1'); segB('ppi-st','start'); segB('ppi-mode','mode');
+  document.querySelectorAll('[data-ppim]').forEach(s=>s.onchange=()=>{ P.map[s.dataset.ppim]=s.value; re(); });
+  $('ppi-parc').onchange=()=>{ P.parc=$('ppi-parc').value; re(); };
+  if($('ppi-pn')) $('ppi-pn').oninput=()=>{ P.parcNew=$('ppi-pn').value; };
+  $('ppi-d').onchange=()=>{ P.date=$('ppi-d').value; }; $('ppi-m').oninput=()=>{ P.cellM=$('ppi-m').value; };
+  if($('ppi-ok')) $('ppi-ok').onclick=async()=>{ if(P.cellM&&!(num(P.cellM)>0)) return err(L('Longueur d\'une case illisible.','Largo de una celda ilegible.'));
+    try{ const r=await ppiImport(ch); S.ppi=null; S.ppiOpen=false; S.ppParc=r.parc; S.ppNewParc=false; S.ppCur=null;
+      toast(L('Plan importé : ','Plano importado: ')+plural(r.filled,'butte remplie','buttes remplies','camellón llenado','camellones llenados')+(r.skipped?' · '+r.skipped+L(' déjà plantées, gardées',' ya plantados, conservados'):'')+'.');
+      renderChauffe(); setTimeout(()=>{ const c=document.querySelector('.ppplanw'); if(c) c.scrollIntoView({block:'start'}); },60); }
+    catch(e){ console.warn(e); err(e.message||L('Import impossible.','Importación imposible.')); } }; }
+
 /* ===== Automatismes après chaque enregistrement ===== */
 async function autoAfterSave(list){ const ids=new Set(list.filter(e=>e&&e.type==='sortie').map(e=>e.chauffeId)); for(const id of ids) await autoSortie(id); }
 async function autoSortie(cid){ const c=liveChauffes().find(x=>x.id===cid); if(!c||!(c.lots||[]).length) return;
@@ -2957,6 +3212,7 @@ function tabPlantation(ch, body){
   body.innerHTML=`
     <div class="plviews" id="pl-views">${[['terrain',L('Terrain','Terreno')],['lots',L('Lots','Lotes')],['inter',L('Travaux','Trabajos')]].map(([k,t])=>`<button type="button" data-v="${k}" aria-pressed="${V===k}">${esc(t)}</button>`).join('')}</div>
     <div ${V!=='terrain'?'hidden':''} id="pp-wrap">${ppCardHTML(ch)}</div>
+    <div ${V!=='terrain'?'hidden':''} id="ppi-wrap">${ppiFoldHTML(ch)}</div>
     <div ${V!=='lots'?'hidden':''}>
     <p class="note" hidden>${esc(L("Après l'acclimatation, les plants sont plantés en pépinière. Les étapes clés sont en haut : tu peux en ajouter (buttage, arrachage…) avec une date prévue. Note ici la plantation de chaque lot, puis tout ce qui est fait sur les parcelles : arrosages, engrais, traitements, travail du sol, désherbage, ébourgeonnage… Tout va dans le registre PDF.","Después de la aclimatación, las plantas se plantan en el vivero. Las etapas clave están arriba: puedes agregar otras (aporque, arranque…) con una fecha prevista. Anota aquí la plantación de cada lote y luego todo lo que se hace en las parcelas: riegos, fertilizantes, tratamientos, trabajo del suelo, desmalezado, desbrote… Todo va al registro PDF."))}</p>
     <div class="card" style="gap:10px" id="pl-lots">
@@ -2985,7 +3241,7 @@ function tabPlantation(ch, body){
     ${allDates.length?`<details class="gsec"${S.plHist?' open':''} id="pl-hist"><summary>${esc(L('Historique de toutes les interventions','Historial de todas las intervenciones'))} (${ops.length+plPhytos(ch).length})</summary><div class="gsecb">${allDates.map(d=>`<button type="button" class="item plhd" data-d="${d}"><div class="hhead"><span class="d">${esc(dayLabel({debut:d},1))} ${esc(d.slice(0,4))}</span><span class="mono">${ops.filter(e=>e.date===d).length+plPhytos(ch).filter(e=>e.date===d).length}</span></div><div class="rem">${esc(ops.filter(e=>e.date===d).map(plOpLine).concat(plPhytos(ch).filter(e=>e.date===d).map(e=>'🧪 '+phytoLine(e))).join(' · '))}</div></button>`).join('')}</div></details>`:''}
     </div>`;
   document.querySelectorAll('#pl-views button').forEach(b=>b.onclick=()=>{ S.plView=b.dataset.v; renderChauffe(); window.scrollTo({top:0}); });
-  bindSteps(ch,'plant'); try{ bindPP(ch); }catch(e){ console.error(e); }
+  bindSteps(ch,'plant'); try{ bindPP(ch); }catch(e){ console.error(e); } try{ ppiMount(ch); }catch(e){ console.error(e); }
   // --- lots
   const el=$('pl-list'); const all=lots.map(l=>({lot:String(l.lot), variete:l.variete, pg:l.pg, qte:l.qte}));
   if(ed && !all.some(l=>l.lot===String(ed.lot))) all.push({lot:String(ed.lot)});
