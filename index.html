@@ -415,7 +415,7 @@ input::-webkit-date-and-time-value{text-align:left}
 .ppchip{position:relative;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:4px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--sunk);font-size:15px;font-weight:600;color:var(--fg);max-width:100%}
 .ppchip select{border:0;background:transparent;font:inherit;padding:0;min-height:0;width:auto;max-width:60vw;color:inherit;-webkit-appearance:none;appearance:none}
 .ppchip input[type=date]{position:absolute;inset:0;opacity:0;width:100%;height:100%;min-height:0;padding:0;border:0}
-.pphead{display:flex;align-items:baseline;gap:10px;font-size:20px}.pphead span{font-size:20px;color:var(--muted)}.pphead .linkbtn{margin-left:auto;font-size:14px}
+.pphead{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;font-size:20px}.pphead span{font-size:20px;color:var(--muted)}.pphead .linkbtn{margin-left:auto;font-size:14px}
 .pptarget{font-size:15px;font-weight:600}
 .ppact{display:grid;grid-template-columns:1fr 2fr;gap:8px}.ppact button{min-height:54px;font-size:16px}
 .ppother{grid-column:1/-1;min-height:48px;border-radius:12px}
@@ -557,6 +557,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 #hc-wrap{margin-top:10px}
 .hcrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}.hcrow:first-child{border-top:0}
 .hcseg{flex-wrap:wrap}.hcseg button{flex:1 1 auto}
+.ppsens{min-height:36px;padding:4px 10px;font-size:14px}.ppsensnote{font-size:14px;color:var(--warn,#a06000);font-weight:600}
 </style>
 </head>
 <body>
@@ -577,7 +578,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.84.0';
+const APP_VERSION = '2.85.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -676,10 +677,10 @@ const isMine = e => S.me && e.auteurId===S.me.id;
 
 function saveErrText(x){ const n=x&&x.name||''; return n==='QuotaExceededError'?L("Enregistrement impossible : la mémoire de l'appareil est pleine. Libère de la place (photos, apps) puis réessaie.","No se pudo guardar: la memoria del dispositivo está llena. Libera espacio y vuelve a intentar.")
   :L("Enregistrement impossible pour l'instant. Ferme complètement l'app (balaie-la vers le haut), rouvre-la et réessaie : rien de ce qui est déjà noté n'est perdu.","No se pudo guardar por ahora. Cierra la app por completo, ábrela de nuevo y vuelve a intentar: nada de lo ya anotado se pierde.")+(n?' ('+n+')':''); }
-async function saveEntry(e){ e.majLe=nowIso(); await DB.put('entrees',e); const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); try{ await autoAfterSave([e]); }catch(err){ console.warn('auto',err); } }
+async function saveEntry(e){ if(typeof ppDirCache!=='undefined') ppDirCache=null; e.majLe=nowIso(); await DB.put('entrees',e); const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); try{ await autoAfterSave([e]); }catch(err){ console.warn('auto',err); } }
 async function saveChauffe(c){ c.majLe=nowIso(); await DB.put('chauffes',c); const i=S.chauffes.findIndex(x=>x.id===c.id); if(i>=0) S.chauffes[i]=c; else S.chauffes.push(c); Sync.mark('chauffe',c.id); }
 async function removeEntry(e){ const t=Object.assign({},e,{supprime:true}); await saveEntry(t); }
-async function saveEntries(list){ if(!list.length) return; const t=nowIso(); list.forEach(e=>e.majLe=t); await DB.putMany('entrees',list); list.forEach(e=>{ const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); });  try{ await autoAfterSave(list); }catch(err){ console.warn('auto',err); } }
+async function saveEntries(list){ if(!list.length) return; if(typeof ppDirCache!=='undefined') ppDirCache=null; const t=nowIso(); list.forEach(e=>e.majLe=t); await DB.putMany('entrees',list); list.forEach(e=>{ const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); });  try{ await autoAfterSave(list); }catch(err){ console.warn('auto',err); } }
 
 /* ---------- Données dérivées d'une chauffe ---------- */
 function myObs(cid, jour){ return entriesOf(cid,'obs').find(e=>e.jour===jour && isMine(e)); }
@@ -1772,8 +1773,7 @@ function ppiSeq(b, aller){ if(!b||!b.segs.length) return []; const E=b.E;
 async function ppiImport(ch){ const P=S.ppi; const R=ppiAnalyze(ch); if(!R||!R.buttes.length) throw new Error(L('Aucune butte à importer.','Ningún camellón para importar.'));
   const parc=(P.parc==='+new'?P.parcNew:P.parc||'').trim(); if(!parc) throw new Error(L('Indique le nom de la parcelle.','Indica el nombre de la parcela.'));
   const D=P.date||todayIso(); const exist=ppPass(ch,parc); const N=R.buttes.length; const out=[]; let filled=0, skipped=0;
-  for(let n=1;n<=Math.ceil(N/3);n++){ const aller=n%2===1; const seqs=[0,1,2].map(i=>ppiSeq(R.buttes[(n-1)*3+i], aller));
-    const old=exist.filter(e=>e.n===n); const e0=old[0];
+  let prevD=false; for(let n=1;n<=Math.ceil(N/3);n++){ const old=exist.filter(e=>e.n===n); const e0=old[0]; const aller=e0?ppAller(e0):!prevD; prevD=aller; const seqs=[0,1,2].map(i=>ppiSeq(R.buttes[(n-1)*3+i], aller));
     if(e0){ const b=[0,1,2].map(i=>((e0.b||[])[i]||[]).slice()); [0,1,2].forEach(i=>{ if(!seqs[i].length) return; if(b[i].length&&P.mode!=='replace'){ skipped++; return; } b[i]=seqs[i]; filled++; });
       out.push(Object.assign({},e0,{b, importe:true, auteurId:S.me.id, auteurNom:S.me.nom})); }
     else { if(!seqs.some(s=>s.length)) continue; seqs.forEach(s=>{ if(s.length) filled++; }); out.push({id:'pp-'+uid(), type:'plpass', chauffeId:ch.id, parc, n, date:D, b:seqs, importe:true, creeLe:nowIso(), auteurId:S.me.id, auteurNom:S.me.nom}); } }
@@ -2261,7 +2261,7 @@ function renderSettings(){
 
 /* ---------- Vue d'une chauffe ---------- */
 let dirty=false;
-function renderChauffe(){
+function renderChauffe(){ ppDirCache=null;
   const ch=chGrow(curChauffe()); const n=lastDay(ch); const grp=dosGroup(ch); const DOS=grp?dossierOf(ch):null;
   if(S.jour>ch.duree) S.jour=ch.duree;
   if(S.dosDet&&S.dosDet!==S.tab) S.dosDet=null;
@@ -3415,7 +3415,13 @@ const ppParcs=ch=>[...new Set([].concat(...ppGroup(ch).map(c=>(c.plparcs||[]).ma
 const ppDepart=(ch,parc)=>{ for(const c of ppGroup(ch)){ const x=(c.plparcs||[]).find(y=>y.nom===parc); if(x&&x.depart) return x.depart; } return L('gauche','izquierda'); };
 const ppPass=(ch,parc)=>ppAllPass(ch).filter(e=>e.parc===parc).sort((a,b)=>a.n-b.n||(a.creeLe||'').localeCompare(b.creeLe||''));
 const ppButte=(e,i)=>(e.n-1)*3+i+1;
-const ppAller=e=>e.n%2===1;
+var ppDirCache=null;
+function ppAller(e){ if(!ppDirCache) ppDirCache={}; if(e.id in ppDirCache) return ppDirCache[e.id];
+  const c=liveChauffes().find(x=>x.id===e.chauffeId); if(!c) return e.n%2===1;
+  const pass=ppPass(c,e.parc); let prev=false, prevN=0, curN=null, curD=null;
+  pass.forEach(x=>{ if(x.n!==curN){ if(curN!=null){ prev=curD; prevN=curN; } const steps=x.n-prevN; let d=(steps-1)%2?!prev:prev; d=x.inv?d:!d; curN=x.n; curD=d; }
+    ppDirCache[x.id]=curD; });
+  if(!(e.id in ppDirCache)) ppDirCache[e.id]=e.n%2===1; return ppDirCache[e.id]; }
 const ppChargeEnts=(ch,date)=>[].concat(...ppGroup(ch).map(c=>entriesOf(c.id,'plcharge').filter(e=>e.date===date)));
 /* Remorque du jour (toutes saisons) : [{k, lot, c, px}] */
 const ppChargeLots=(ch,date)=>{ const out=[]; ppChargeEnts(ch,date).forEach(e=>(e.lots||[]).forEach(x=>{ const k=ppK(x.c||e.chauffeId,String(x.lot)); if(!out.some(y=>y.k===k)) out.push({k, lot:String(x.lot), c:x.c||e.chauffeId, px:x.px}); })); return out; };
@@ -3485,7 +3491,8 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
     const target=nSel===3?L('les 3 buttes','los 3 camellones'):sel.map((v,i)=>v?ppButte(cur,i):null).filter(x=>x!=null).map(n=>L('butte ','camellón ')+n).join(L(' et ',' y '));
     const ci=pass.findIndex(x=>x.id===cur.id);
     field=`<div class="ppnav"><button type="button" class="ghost" id="pp-prev"${ci<=0?' disabled':''}>‹ ${esc(L('Passage ','Pasada ')+(ci>0?pass[ci-1].n:''))}</button><span class="small">${esc(isLast?L('passage en cours','pasada en curso'):L('correction d\'un passage','corrección de una pasada'))}</span><button type="button" class="ghost" id="pp-nextp"${isLast?' disabled':''}>${esc(!isLast?L('Passage ','Pasada ')+pass[ci+1].n:'')} ›</button></div>
-      <div class="pphead"><b>${esc(L('Passage ','Pasada ')+cur.n)}</b><span>${ppArr(ch,parc,ppAller(cur))}</span>${!isLast?`<button class="linkbtn" type="button" id="pp-last">${esc(L('↩ revenir au dernier','↩ volver al último'))}</button>`:''}</div>
+      <div class="pphead"><b>${esc(L('Passage ','Pasada ')+cur.n)}</b><span>${ppArr(ch,parc,ppAller(cur))}</span><button class="ghost ppsens" type="button" id="pp-sens">⇅ ${esc(L('Changer de sens','Cambiar de sentido'))}</button>${!isLast?`<button class="linkbtn" type="button" id="pp-last">${esc(L('↩ revenir au dernier','↩ volver al último'))}</button>`:''}</div>
+      ${cur.inv?`<div class="ppsensnote">${esc(cur.n>1?L('Même sens que le passage ','Mismo sentido que la pasada ')+(cur.n-1)+L(' (on a repris du même côté).',' (se retomó del mismo lado).'):L("Commencé par l'autre bout.",'Empezado por el otro extremo.'))}</div>`:''}
       ${(()=>{ const bs=[0,1,2].map(i=>ppButte(cur,i)); const os=ppObst(ch,parc).filter(o=>bs.some(b=>b>=o.b1&&b<=o.b2)); return os.length?`<div class="ppobw">${os.map(o=>`<div>⚠️ ${esc(obTxt(o))}</div>`).join('')}</div>`:''; })()}
       <div class="ppbuttes">${[0,1,2].map(i=>{ const seq=(cur.b||[])[i]||[]; return `<button type="button" class="ppb" data-i="${i}" aria-pressed="${!!sel[i]}"><small>${esc(L('Butte ','Camellón ')+ppButte(cur,i))}</small><span>${seq.length?seq.map(x=>chip(ppXK(x,cur))).join('<i>→</i>'):'<em>?</em>'}</span></button>`; }).join('')}</div>
       <div class="pptarget">${esc(L('Touche le lot planté sur ','Toca el lote plantado en ')+target)}${nSel<3?` <button class="linkbtn" type="button" id="pp-all">${esc(L('les 3','los 3'))}</button>`:''}</div>
@@ -3575,6 +3582,8 @@ function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const w=$('pp-wr
     await removeEntry(cur); try{ await ppSync(cur.chauffeId); }catch(err){} S.ppCur=null; toast(L('Passage supprimé.','Pasada eliminada.')); keep(); }); }
   { const ci=pass.findIndex(x=>x.id===cur.id); if($('pp-prev')) $('pp-prev').onclick=()=>{ if(ci>0){ S.ppCur=pass[ci-1].id; S.ppSel=[true,true,true]; keep(); } }; if($('pp-nextp')) $('pp-nextp').onclick=()=>{ if(ci<pass.length-1){ S.ppCur=pass[ci+1].id; S.ppSel=[true,true,true]; keep(); } }; }
   if($('pp-last')) $('pp-last').onclick=()=>{ S.ppCur=null; keep(); };
+  if($('pp-sens')) $('pp-sens').onclick=busy(async()=>{ const n=Object.assign({},cur); if(n.inv) delete n.inv; else n.inv=true; await ppSave(n); S.ppCur=cur.id;
+    toast(n.inv?L('Passage ','Pasada ')+cur.n+L(' : même sens que le précédent. Les suivants repartent de là.',': mismo sentido que la anterior. Las siguientes siguen desde ahí.'):L('Passage ','Pasada ')+cur.n+L(' : sens normal.',': sentido normal.')); keep(); });
   if($('pp-listd')) $('pp-listd').addEventListener('toggle',()=>{ S.ppListOpen=$('pp-listd').open; });
   document.querySelectorAll('.pprow').forEach(b=>b.onclick=()=>{ S.ppCur=b.dataset.id; S.ppSel=[true,true,true]; keep(); setTimeout(()=>{ const c=$('pp-card'); if(c) c.scrollIntoView({block:'start'}); },30); }); }
 /* PLAN DE LA PARCELLE (pas à l'échelle) : buttes de gauche à droite depuis le côté de départ,
@@ -4117,7 +4126,7 @@ function miniSynth(ch,t){ const lots=ch.lots||[]; const r2=v=>Math.round(v*100)/
   if(t==='bilan'){ const tri=lotsWithBilan(ch).filter(l=>bilanRate(l.b)!=null); const ag=aggRate(tri);
     add(L('Lots triés','Lotes seleccionados'),tri.length+' / '+lots.length); if(ag.rate!=null) add(L('Réussite générale','Éxito general'),pct(ag.rate),ag.rate<0.7?'warn':'ok'); if(ag.tries) add(L('Plants triés','Plantas seleccionadas'),fmtN(ag.tries)); }
   return out; }
-function miniMount(ch){ const t=S.tab; const b=$('c-body'); if(!b) return; const k=miniSynth(ch,t); if(!k.length) return;
+function miniMount(ch){ const t=S.tab; const b=$('c-body'); if(!b) return; Array.from(b.children).filter(x=>x.classList&&x.classList.contains('minisyn')).forEach(x=>x.remove()); const k=miniSynth(ch,t); if(!k.length) return;
   const w=document.createElement('div'); w.className='minisyn'; w.innerHTML=k.map(x=>`<span class="ms ${x[2]}"><small>${esc(x[0])}</small><b>${esc(x[1])}</b></span>`).join(''); b.insertBefore(w,b.firstChild); }
 function tabNotesMount(ch){ const t=S.tab==='lots'?'jour':S.tab; if(!TN_TABS[t]) return; const b=$('c-body'); if(!b) return;
   const w=document.createElement('div'); w.className='tabpart tnwrap'; w.innerHTML=tabNotesHTML(ch,t); b.appendChild(w); bindTabNotes(ch,t); }
