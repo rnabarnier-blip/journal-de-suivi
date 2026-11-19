@@ -558,6 +558,12 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .hcrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}.hcrow:first-child{border-top:0}
 .hcseg{flex-wrap:wrap}.hcseg button{flex:1 1 auto}
 .ppsens{min-height:36px;padding:4px 10px;font-size:14px}.ppsensnote{font-size:14px;color:var(--warn,#a06000);font-weight:600}
+.obed{border:2px solid var(--accent,#4a4278)}.obtool{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.obtool .obk{min-height:44px;padding:4px 12px}.obtool .obk.on{background:#c2410c;color:#fff;border-color:#c2410c}
+.obview{display:flex;gap:6px;flex-wrap:wrap}.obview .tlsm{min-width:44px;min-height:40px}.obview .on{background:var(--sunk);font-weight:700}
+.obwrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:10px;background:var(--surface);-webkit-overflow-scrolling:touch}
+.obz{cursor:grab}.obz.on rect{filter:drop-shadow(0 0 3px rgba(194,65,12,.6))}.obn{font-size:10px;fill:var(--muted)}
+.obselc{display:grid;gap:8px;background:var(--sunk);border-radius:10px;padding:10px}
+.hcst{font-size:12.5px;font-weight:600;color:var(--muted)}.hcst.ok{color:var(--ok)}
 </style>
 </head>
 <body>
@@ -578,7 +584,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.85.0';
+const APP_VERSION = '2.86.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -1864,7 +1870,7 @@ function bindPPI(ch){ const re=()=>{ const b=$('ppi-body'); if(!b) return; const
 function hcFoldHTML(ch){ const d=dossierOf(ch); const ls=d?(d.horsLots||[]):[]; const ed=S.hcEd&&S.hcEd.dos===(d&&d.id)?S.hcEd:null; const used=new Set(ppAllPass(ch).map(p=>[].concat(...(p.b||[]).map(q=>(q||[]).map(x=>ppXK(x,p))))).flat());
   const inner=!d?`<p class="hint" style="margin:0">${esc(L("Range d'abord cette chauffe dans une saison (Infos → Modifier).","Primero guarda esta calefacción en una temporada (Infos → Modificar)."))}</p>`:`
     <p class="hint" style="margin:0">${esc(L("Vignes mères, repiqués, variétés qui n'étaient pas en chauffe : ajoute-les ici, ils apparaissent ensuite avec les lots pour planter, sur le plan et dans l'import Excel.","Plantas madre, repicados, variedades que no estaban en calefacción: agrégalos aquí, luego aparecen con los lotes para plantar, en el plano y en la importación Excel."))}</p>
-    ${ls.length?`<div class="list">${ls.map((l,i)=>`<div class="hcrow"><span class="pplot" style="background:${ppColors(ch)[ppK(d.id,String(l.lot))]||'var(--accent)'}">${esc(l.lot)}</span><span><b>${esc(hcCatTxt(l.cat))}</b><br><small>${esc([[l.variete,l.pg].filter(Boolean).join(' / '), l.nb?fmtN(l.nb)+L(' plants',' plantas'):'', l.note||''].filter(Boolean).join(' · '))}</small></span><button type="button" class="ghost tlsm" data-hced="${i}">✏️</button><button type="button" class="ghost tlsm tldel" data-hcdel="${i}" aria-label="${esc(L('Supprimer','Eliminar'))}">🗑</button></div>`).join('')}</div>`:''}
+    ${ls.length?`<div class="list">${ls.map((l,i)=>`<div class="hcrow"><span class="pplot" style="background:${ppColors(ch)[ppK(d.id,String(l.lot))]||'var(--accent)'}">${esc(l.lot)}</span><span><b>${esc(hcCatTxt(l.cat))}</b>${(()=>{ const e=plLotOf({id:d.id},l.lot); return e?(plFini(e)?' <span class="hcst ok">✅ '+esc(L('fini','terminado'))+'</span>':' <span class="hcst">'+esc(L('en cours','en curso'))+'</span>'):''; })()}<br><small>${esc([[l.variete,l.pg].filter(Boolean).join(' / '), l.nb?fmtN(l.nb)+L(' plants',' plantas'):'', l.note||''].filter(Boolean).join(' · '))}</small></span><button type="button" class="ghost tlsm" data-hced="${i}">✏️</button><button type="button" class="ghost tlsm tldel" data-hcdel="${i}" aria-label="${esc(L('Supprimer','Eliminar'))}">🗑</button></div>`).join('')}</div>`:''}
     ${ed?hcFormHTML(ch,d,ed,used):`<button class="ghost" type="button" id="hc-new">+ ${esc(L('Ajouter des plants hors chauffe','Agregar plantas fuera de calefacción'))}</button>`}
     <div class="status" id="hc-st"></div>`;
   return `<details class="gsec" id="hc-fold"${S.hcOpen||ed?' open':''}><summary>🌳 ${esc(L('Plants hors chauffe (vignes mères, repiqués…)','Plantas fuera de calefacción (plantas madre, repicados…)'))}${ls.length?' <span class="mono">'+ls.length+'</span>':''}</summary><div class="gsecb"><div class="card" style="gap:10px">${inner}</div></div></details>`; }
@@ -1902,6 +1908,99 @@ function bindHC(ch){ const f=$('hc-fold'); if(!f) return; f.ontoggle=()=>{ S.hcO
     const it={lot, cat:ed.cat||(old&&old.cat)||'vm', variete:$('hc-var').value.trim(), pg:$('hc-pg').value.trim(), nb:nb?num(nb):null, note:$('hc-note').value.trim()};
     if(old) ls[ed.i]=Object.assign({},old,it); else ls.push(it);
     await saveEntry(Object.assign({},d,{horsLots:ls})); S.hcEd=null; toast(L('Enregistré : ','Guardado: ')+lot+'.'); re(); }; }
+/* ===== Zones non plantables : dessiner et faire glisser sur le plan =====
+   Touche un type (arbre, dalle…), glisse le doigt sur le plan : la zone se dessine.
+   Touche une zone pour la choisir, glisse-la pour la déplacer, tire un bord pour l'agrandir. */
+function obGeo(ch,pc){ const pass=ppPass(ch,pc); const ob=ppObst(ch,pc); const cfg=ppParcCfg(ch,pc).x||{};
+  const HZ=ppOrient(ch,pc)==='h', R=ppRight(ch,pc), FB=ppHFirst(ch,pc)==='bas', SL=ppHStart(ch,pc)==='gauche';
+  const nP=pass.length?Math.max(...pass.map(e=>ppButte(e,2))):0, nO=ob.length?Math.max(...ob.map(o=>o.b2||o.b1||1)):0, nL=Math.max(0,...Object.keys(cfg.len||{}).map(Number).filter(isFinite));
+  const N=Math.max(10, nP, nO, nL)+(S.obMore||0);
+  const def=ppLenDef(ch,pc)||200; const lens=[], offs=[]; for(let b=1;b<=N;b++){ lens[b]=ppLen(ch,pc,b)||def; offs[b]=ppOff(ch,pc,b)||0; }
+  const Lmax=Math.max(...lens.slice(1).map((v,i)=>v+(offs[i+1]||0)));
+  const z=S.obZoom||1; const avail=Math.max(300,Math.min(1100,(window.innerWidth||900)-70));
+  const gap=N>120?1:N>60?2:3; const fitBw=Math.floor((avail-50)/N)-gap;
+  const bw=HZ?Math.max(8,Math.min(26,Math.round(16*z))):Math.max(4,Math.min(40,Math.round(Math.max(4,fitBw)*z)));
+  const T=HZ?8:24, XL=HZ?44:8, B=HZ?8:22; const Lpx=HZ?Math.round((avail-60)*z):Math.round(380*z);
+  const sc=Lpx/Lmax; const pos=b=>HZ?(FB?(N-b):(b-1)):(R?(N-b):(b-1)); const across=b=>(HZ?T:XL)+pos(b)*(bw+gap);
+  const W=HZ?XL+Lpx+8:XL*2+N*bw+(N-1)*gap, Ht=HZ?T+N*bw+(N-1)*gap+B:T+Lpx+B;
+  const box=(b,m0,m1)=>{ const v0=(offs[b]+m0)*sc, v1=(offs[b]+m1)*sc, a=across(b); if(!HZ) return {x:a, y:T+Lpx-v1, w:bw, h:v1-v0}; return SL?{x:XL+v0, y:a, w:v1-v0, h:bw}:{x:XL+Lpx-v1, y:a, w:v1-v0, h:bw}; };
+  const zbox=o=>{ const A=box(o.b1,o.from,o.from+(o.len||2)), Z=box(o.b2,o.from,o.from+(o.len||2)); const x=Math.min(A.x,Z.x), y=Math.min(A.y,Z.y); return {x, y, w:Math.max(A.x+A.w,Z.x+Z.w)-x, h:Math.max(A.y+A.h,Z.y+Z.h)-y}; };
+  const hit=(x,y)=>{ const a=HZ?y:x; let p=Math.floor((a-(HZ?T:XL)+gap/2)/(bw+gap)); p=Math.max(0,Math.min(N-1,p)); const b=HZ?(FB?N-p:p+1):(R?N-p:p+1);
+    const v=HZ?(SL?x-XL:XL+Lpx-x):(T+Lpx-y); const m=Math.max(0,Math.min(lens[b],v/sc-offs[b])); return {b, m}; };
+  return {pass,N,HZ,R,FB,SL,bw,gap,T,XL,B,Lpx,sc,lens,offs,W,Ht,box,zbox,hit,across}; }
+const obSnap=m=>Math.round(m*2)/2;
+function obEdSVG(ch,pc,G){ const col=ppColors(ch); let g='';
+  for(let b=1;b<=G.N;b++){ const r=G.box(b,0,G.lens[b]); g+=`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="1.5" fill="var(--sunk)" stroke="#b9b2a6" stroke-width=".6"/>`; }
+  G.pass.forEach(e=>{ const up=ppAller(e); [0,1,2].forEach(i=>{ const b=ppButte(e,i), seq=((e.b||[])[i]||[]); if(!seq.length) return; const fr=ppFr(G.pass,e,i).concat([1]); const Lm=G.lens[b];
+    seq.forEach((x,k)=>{ const f0=up?fr[k]:1-fr[k+1], f1=up?fr[k+1]:1-fr[k]; const r=G.box(b,f0*Lm,f1*Lm); g+=`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${Math.max(1,r.h)}" fill="${col[ppXK(x,e)]||'#4a4278'}" opacity=".45"/>`; }); }); });
+  const step=Math.max(1,Math.ceil(G.N/(G.HZ?40:Math.max(8,G.W/34)))); let nums='';
+  for(let b=1;b<=G.N;b++){ if(b!==1&&b%step&&b!==G.N) continue; const a=G.across(b)+G.bw/2; nums+=G.HZ?`<text x="${G.XL-4}" y="${a}" text-anchor="end" dominant-baseline="central" class="obn">${b}</text>`:`<text x="${a}" y="${G.Ht-6}" text-anchor="middle" class="obn">${b}</text>`; }
+  const grow=(r,al,ac)=>{ const q=Object.assign({},r); if(G.HZ){ if(q.w<al){ q.x-=(al-q.w)/2; q.w=al; } if(q.h<ac){ q.y-=(ac-q.h)/2; q.h=ac; } } else { if(q.h<al){ q.y-=(al-q.h)/2; q.h=al; } if(q.w<ac){ q.x-=(ac-q.w)/2; q.w=ac; } } return q; };
+  const zs=ppObst(ch,pc).map(o=>{ const r0=G.zbox(o); const r=grow(r0,14,0), hr=grow(r0,34,26); const on=S.obSel===o.id;
+    return `<g class="obz${on?' on':''}" data-oid="${esc(o.id)}"><rect x="${hr.x}" y="${hr.y}" width="${hr.w}" height="${hr.h}" fill="transparent"/><rect x="${r.x-1}" y="${r.y}" width="${r.w+2}" height="${Math.max(4,r.h)}" fill="url(#obpat)" stroke="${on?'#c2410c':'#333'}" stroke-width="${on?3:1.4}" rx="2"/><text x="${r.x+r.w/2}" y="${r.y+r.h/2}" text-anchor="middle" dominant-baseline="central" style="font-size:${Math.max(11,Math.min(20,Math.min(r.w,r.h)))}px;pointer-events:none">${obIco(o.kind)}</text></g>`; }).join('');
+  return `<svg id="ob-svg" viewBox="0 0 ${G.W} ${G.Ht}" width="${G.W}" height="${G.Ht}" style="display:block;touch-action:${S.obPan?'auto':'none'};user-select:none;-webkit-user-select:none"><defs><pattern id="obpat" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#e6dfd2"/><path d="M0 0v6" stroke="#6b665d" stroke-width="2"/></pattern></defs>${g}${nums}${zs}<rect id="ob-ghost" x="0" y="0" width="0" height="0" fill="rgba(194,65,12,.25)" stroke="#c2410c" stroke-width="2" stroke-dasharray="5 3" style="pointer-events:none"/></svg>`; }
+function obEdHTML(ch,pc){ const G=obGeo(ch,pc); const ob=ppObst(ch,pc); const sel=ob.find(o=>o.id===S.obSel); const k=S.obAdd;
+  return `<div class="card obed" id="ob-ed" data-parc="${esc(pc)}" style="gap:10px">
+    <div class="hhead"><b>🌳 ${esc(L('Zones non plantables','Zonas sin plantar'))} · ${esc(pc)}</b><button class="primary" type="button" id="ob-done">${esc(L('Terminé','Listo'))}</button></div>
+    <div class="obtool"><span class="lab">${esc(L('Ajouter :','Agregar:'))}</span>${OBK().map(([kk,i,t])=>`<button type="button" class="ghost obk${k===kk?' on':''}" data-k="${kk}" aria-pressed="${k===kk}">${i} ${esc(t)}</button>`).join('')}</div>
+    <p class="hint obhint" style="margin:0">${esc(S.obPan?L('Mode défilement : glisse pour voir le reste du plan. Touche « ✏️ Dessiner » pour revenir.','Modo desplazamiento: desliza para ver el resto del plano. Toca « ✏️ Dibujar » para volver.'):k?L('Glisse le doigt sur le plan pour dessiner la zone (ou touche juste l\'endroit).','Desliza el dedo en el plano para dibujar la zona (o solo toca el lugar).'):L('Touche une zone pour la choisir, puis glisse-la pour la déplacer ou tire un de ses bords pour l\'agrandir.','Toca una zona para elegirla, luego deslízala para moverla o tira de uno de sus bordes para agrandarla.'))}</p>
+    <div class="obview"><button type="button" class="ghost tlsm" id="ob-zm">−</button><button type="button" class="ghost tlsm" id="ob-zp">+</button><button type="button" class="ghost tlsm${S.obPan?' on':''}" id="ob-pan">${S.obPan?'✏️ '+esc(L('Dessiner','Dibujar')):'✋ '+esc(L('Faire défiler','Desplazar'))}</button><button type="button" class="ghost tlsm" id="ob-more">+10 ${esc(L('buttes','camellones'))}</button></div>
+    <div class="obwrap" id="ob-wrap">${obEdSVG(ch,pc,G)}</div>
+    <div id="ob-sel">${sel?obSelHTML(sel):''}</div>
+    <div class="status" id="ob-st"></div></div>`; }
+function obSelHTML(o){ return `<div class="obselc"><div class="seg ppobk" id="ob-kind">${OBK().map(([k,i,t])=>`<button type="button" data-v="${k}" aria-pressed="${o.kind===k}">${i} ${esc(t)}</button>`).join('')}</div>
+    <div class="ppbrow"><span>${esc(L('Buttes','Camellones'))}</span><input class="num" id="ob-b1" inputmode="numeric" value="${o.b1}"><span>${esc(L('à','a'))}</span><input class="num" id="ob-b2" inputmode="numeric" value="${o.b2}"></div>
+    <div class="ppbrow"><span>${esc(L('À','A'))}</span><input class="num" id="ob-from" inputmode="decimal" value="${esc(fmtN(o.from))}"><span>${esc(L('m du début, sur','m del inicio, en'))}</span><input class="num" id="ob-len" inputmode="decimal" value="${esc(fmtN(o.len||2))}"><span>m</span></div>
+    <input type="text" id="ob-nom" value="${esc(o.nom||'')}" placeholder="${esc(L('Nom (facultatif) : ex. gros noyer','Nombre (opcional): ej. nogal grande'))}">
+    <div class="row"><button class="ghost" type="button" id="ob-del">🗑 ${esc(L('Supprimer la zone','Eliminar la zona'))}</button><button class="linkbtn" type="button" id="ob-unsel">${esc(L('Fermer','Cerrar'))}</button></div></div>`; }
+function bindObEd(ch,pc,again){ const ed=$('ob-ed'); if(!ed) return; const st=$('ob-st');
+  const reEd=()=>{ const w=$('ob-wrap'); const sx=w?[w.scrollLeft,w.scrollTop]:[0,0]; ed.outerHTML=obEdHTML(ch,pc); bindObEd(ch,pc,again); const w2=$('ob-wrap'); if(w2){ w2.scrollLeft=sx[0]; w2.scrollTop=sx[1]; } };
+  const save=async list=>{ await ppSetParcCfg(ch,pc,{obst:list}); };
+  const upd=async(id,patch)=>{ const list=ppObst(ch,pc).map(o=>o.id===id?Object.assign({},o,patch):o); await save(list); };
+  $('ob-done').onclick=()=>{ S.obEd=null; S.obSel=null; S.obAdd=null; S.obPan=false; again(); };
+  ed.querySelectorAll('.obk').forEach(b=>b.onclick=()=>{ S.obAdd=S.obAdd===b.dataset.k?null:b.dataset.k; S.obPan=false; S.obSel=null; reEd(); });
+  $('ob-zp').onclick=()=>{ S.obZoom=Math.min(4,(S.obZoom||1)*1.5); reEd(); }; $('ob-zm').onclick=()=>{ S.obZoom=Math.max(.5,(S.obZoom||1)/1.5); reEd(); };
+  $('ob-pan').onclick=()=>{ S.obPan=!S.obPan; reEd(); }; $('ob-more').onclick=()=>{ S.obMore=(S.obMore||0)+10; reEd(); };
+  // panneau de la zone choisie
+  const o=ppObst(ch,pc).find(x=>x.id===S.obSel);
+  if(o){ $('ob-kind').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ await upd(o.id,{kind:b.dataset.v}); reEd(); });
+    const nums=async()=>{ const b1=Math.round(num($('ob-b1').value)), b2=Math.round(num($('ob-b2').value)), f=num($('ob-from').value), l=num($('ob-len').value);
+      if(!(b1>=1)||!(b2>=b1)||!(f>=0)||!(l>0)){ st.textContent=L('Chiffres illisibles.','Cifras ilegibles.'); st.className='status err'; return; } await upd(o.id,{b1,b2,from:f,len:l}); reEd(); };
+    ['ob-b1','ob-b2','ob-from','ob-len'].forEach(id=>$(id).onchange=nums);
+    $('ob-nom').onchange=async()=>{ await upd(o.id,{nom:$('ob-nom').value.trim()}); };
+    $('ob-unsel').onclick=()=>{ S.obSel=null; reEd(); };
+    let armed=false; $('ob-del').onclick=async()=>{ const b=$('ob-del'); if(!armed){ armed=true; b.textContent=L('Toucher encore pour supprimer','Tocar otra vez para eliminar'); b.classList.add('arm'); setTimeout(()=>{ armed=false; if(b.isConnected){ b.textContent='🗑 '+L('Supprimer la zone','Eliminar la zona'); b.classList.remove('arm'); } },3000); return; }
+      await save(ppObst(ch,pc).filter(x=>x.id!==o.id)); S.obSel=null; toast(L('Zone supprimée.','Zona eliminada.')); reEd(); }; }
+  // dessin et glisser
+  const svg=$('ob-svg'); if(!svg||S.obPan) return; const G=obGeo(ch,pc); const ghost=$('ob-ghost');
+  const pt=ev=>{ const m=svg.getScreenCTM(); const p=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(m.inverse()); return {x:p.x,y:p.y}; };
+  const show=z=>{ const r=G.zbox(z); ghost.setAttribute('x',r.x-1); ghost.setAttribute('y',r.y); ghost.setAttribute('width',r.w+2); ghost.setAttribute('height',Math.max(4,r.h)); };
+  let D=null;
+  svg.addEventListener('pointerdown',ev=>{ const p=pt(ev); const h=G.hit(p.x,p.y); const zEl=ev.target.closest&&ev.target.closest('.obz'); ev.preventDefault();
+    if(S.obAdd){ D={mode:'new', h0:h, p0:p, z:{b1:h.b,b2:h.b,from:obSnap(h.m),len:.5}}; show(D.z); }
+    else if(zEl){ const z0=ppObst(ch,pc).find(x=>x.id===zEl.dataset.oid); if(!z0) return; const r=G.zbox(z0); const E=Math.max(10,Math.min(r.w,r.h)/3);
+      const nearA=G.HZ?Math.min(Math.abs(p.x-r.x),Math.abs(p.x-r.x-r.w))<E:Math.min(Math.abs(p.y-r.y),Math.abs(p.y-r.y-r.h))<E; // bords le long de la butte
+      const nearX=G.HZ?Math.min(Math.abs(p.y-r.y),Math.abs(p.y-r.y-r.h))<E*.8:Math.min(Math.abs(p.x-r.x),Math.abs(p.x-r.x-r.w))<E*.8; // bords en travers
+      const acr=G.HZ?r.h:r.w, alo=G.HZ?r.w:r.h; const mode=S.obSel!==z0.id?'pick':(nearA&&alo>2.5*E)?'len':(nearX&&acr>2.5*E)?'bs':'move';
+      D={mode, h0:h, p0:p, o0:Object.assign({},z0), z:Object.assign({},z0), id:z0.id, end:Math.abs(h.m-(z0.from+(z0.len||2)))<Math.abs(h.m-z0.from)?'m1':'m0', bend:Math.abs(h.b-z0.b2)<Math.abs(h.b-z0.b1)?'b2':'b1'}; if(D.mode!=='pick') show(D.z); }
+    else { D={mode:'none', p0:p}; }
+    try{ svg.setPointerCapture(ev.pointerId); }catch(e){} });
+  svg.addEventListener('pointermove',ev=>{ if(!D||D.mode==='none') return; const p=pt(ev); const h=G.hit(p.x,p.y); ev.preventDefault();
+    if(D.mode==='pick'){ if(Math.hypot(p.x-D.p0.x,p.y-D.p0.y)>8) D.mode='move'; else return; }
+    const o0=D.o0, z=D.z;
+    if(D.mode==='new'){ z.b1=Math.min(D.h0.b,h.b); z.b2=Math.max(D.h0.b,h.b); const a=obSnap(Math.min(D.h0.m,h.m)), b=obSnap(Math.max(D.h0.m,h.m)); z.from=a; z.len=Math.max(.5,b-a); }
+    else if(D.mode==='move'){ const db=h.b-D.h0.b; const span=o0.b2-o0.b1; let b1=Math.max(1,Math.min(G.N-span,o0.b1+db)); z.b1=b1; z.b2=b1+span; z.from=Math.max(0,obSnap(o0.from+h.m-D.h0.m)); }
+    else if(D.mode==='len'){ const e0=o0.from+(o0.len||2); if(D.end==='m1'){ z.len=Math.max(.5,obSnap(h.m)-o0.from); } else { const f=Math.min(obSnap(h.m),e0-.5); z.from=Math.max(0,f); z.len=e0-z.from; } }
+    else if(D.mode==='bs'){ if(D.bend==='b2'){ z.b2=Math.max(o0.b1,h.b); } else { z.b1=Math.min(o0.b2,h.b); } }
+    D.moved=true; show(z); });
+  const end=async ev=>{ if(!D) return; const d=D; D=null; ghost.setAttribute('width',0);
+    if(d.mode==='new'){ const z=d.z; if(!d.moved){ const dl=S.obAdd==='poteau'?1:S.obAdd==='arbre'?4:5; z.from=Math.max(0,obSnap(d.h0.m-dl/2)); z.len=dl; }
+      const n={id:'ob'+uid().slice(-6), kind:S.obAdd, nom:'', b1:z.b1, b2:z.b2, from:z.from, len:z.len}; await save(ppObst(ch,pc).concat([n])); S.obAdd=null; S.obSel=n.id; toast(L('Zone ajoutée : ','Zona agregada: ')+obName(n)+L('. Glisse-la pour la placer.','. Deslízala para ubicarla.')); reEd(); return; }
+    if(d.mode==='pick'){ S.obSel=d.id; reEd(); return; }
+    if(d.mode==='none'){ if(S.obSel){ S.obSel=null; reEd(); } return; }
+    if(d.moved){ await upd(d.id,{b1:d.z.b1,b2:d.z.b2,from:d.z.from,len:d.z.len}); } reEd(); };
+  svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',()=>{ D=null; ghost.setAttribute('width',0); }); }
+
 /* ===== Automatismes après chaque enregistrement ===== */
 async function autoAfterSave(list){ const ids=new Set(list.filter(e=>e&&e.type==='sortie').map(e=>e.chauffeId)); for(const id of ids) await autoSortie(id); }
 async function autoSortie(cid){ const c=liveChauffes().find(x=>x.id===cid); if(!c||!(c.lots||[]).length) return;
@@ -3513,7 +3612,7 @@ function ppCardHTML(ch){ const AL=ppAllLots(ch); if(!AL.length) return `<div cla
    jusqu'à ce qu'on touche « Lot fini ». Les jours notés à la main sans terrain sont gardés. */
 async function ppSyncOne(chId, grpCh){ const ch={id:chId}; const P=ppAllPass(grpCh); const days={};
   P.forEach(p=>(p.b||[]).forEach(seq=>(seq||[]).forEach(x=>{ if((x.c||p.chauffeId)!==chId) return; const k=String(x.lot); const o=days[k]=days[k]||{d:new Set(),parcs:new Set()}; if(p.date) o.d.add(p.date); if(p.parc) o.parcs.add(p.parc); })));
-  const chObj=liveChauffes().find(c=>c.id===chId)||{}; const out=[];
+  const chObj=liveChauffes().find(c=>c.id===chId)||(String(chId).startsWith('dossier:')?(ppHC(grpCh)||{}):{}); const out=[];
   const lots=new Set(Object.keys(days).concat(plLots(ch).filter(e=>e.terrain).map(e=>String(e.lot))));
   const strip=e=>{ const c=Object.assign({},e); delete c.majLe; return JSON.stringify(c); };
   lots.forEach(lot=>{ const o=days[lot]; const e=plLotOf(ch,lot);
@@ -3533,7 +3632,7 @@ async function ppSyncOne(chId, grpCh){ const ch={id:chId}; const P=ppAllPass(grp
     delete base.supprime;
     if(!e||strip(e)!==strip(base)) out.push(base); });
   if(out.length) await saveEntries(out); }
-async function ppSync(chId){ const ch=liveChauffes().find(c=>c.id===chId); if(!ch) return; for(const c of ppGroup(ch)) await ppSyncOne(c.id, ch); }
+async function ppSync(chId){ const ch=liveChauffes().find(c=>c.id===chId); if(!ch) return; for(const c of ppGroup(ch)) await ppSyncOne(c.id, ch); const H=ppHC(ch); if(H) await ppSyncOne(H.id, ch); }
 async function ppSave(e){ await saveEntry(e); try{ await ppSync(e.chauffeId); }catch(err){ console.warn('ppSync',err); } }
 function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const w=$('pp-wrap'); const c=curChauffe(); if(!w||!c){ const y=window.scrollY; renderChauffe(); window.scrollTo({top:y}); return; }
     const y=window.scrollY; w.innerHTML=ppCardHTML(c); try{ bindPP(c); }catch(e){ console.error(e); } try{ miniMount(c); }catch(e){} window.scrollTo({top:y}); };
@@ -3559,7 +3658,7 @@ function bindPP(ch){ if(!$('pp-card')) return; const keep=()=>{ const w=$('pp-wr
   if($('pp-create')) $('pp-create').onclick=async()=>{ const nom=$('pp-nom').value.trim(); if(!nom){ $('pp-nom').focus(); return; } const c=curChauffe(); const list=(c.plparcs||[]).filter(x=>x.nom!==nom); list.push({nom, depart:S.ppNewDep==='droite'?L('droite','derecha'):L('gauche','izquierda')}); await saveChauffe(Object.assign({},c,{plparcs:list})); S.ppParc=nom; S.ppNewParc=false; S.ppCur=null; keep(); };
   if($('pp-start')) $('pp-start').onclick=async()=>{ const e={id:'pp-'+uid(), type:'plpass', chauffeId:ch.id, parc, n:1, date:S.ppDate, b:[[],[],[]], creeLe:nowIso(), auteurId:S.me.id, auteurNom:S.me.nom}; await ppSave(e); S.ppCur=e.id; S.ppSel=[true,true,true]; keep(); };
   document.querySelectorAll('.ppfin').forEach(b=>b.onclick=async()=>{ const {c,lot}=ppKs(b.dataset.k); const e=plLotOf({id:c},lot); if(!e) return; const fin=!plFini(e);
-    await saveEntry(Object.assign({},e,{fini:fin, auteurId:S.me.id, auteurNom:S.me.nom})); toast(fin?L('Lot ','Lote ')+e.lot+L(' fini : il sort de l\'acclimatation.',' terminado: sale de la aclimatación.'):L('Lot ','Lote ')+e.lot+L(' de nouveau en cours.',' de nuevo en curso.')); keep(); });
+    await saveEntry(Object.assign({},e,{fini:fin, auteurId:S.me.id, auteurNom:S.me.nom})); toast(fin?L('Lot ','Lote ')+e.lot+(String(c).startsWith('dossier:')?L(' fini.',' terminado.'):L(' fini : il sort de l\'acclimatation.',' terminado: sale de la aclimatación.')):L('Lot ','Lote ')+e.lot+L(' de nouveau en cours.',' de nuevo en curso.')); keep(); });
   if($('pp-plan')) $('pp-plan').onclick=()=>{ S.tab='hist'; renderChauffe(); window.scrollTo({top:0}); };
   if(!cur) return;
   document.querySelectorAll('#pp-card .ppb').forEach(b=>b.onclick=()=>{ const i=Number(b.dataset.i);
@@ -3691,7 +3790,8 @@ function ppPlanCardHTML(ch, print){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch
     const legend=ks.map(k=>{ const pe=(()=>{ const {c,lot}=ppKs(k); return plLotOf({id:c},lot); })(); return `<${print?'div':'button type="button"'} class="pplg${hl===k?' on':''}" data-hl="${esc(k)}"><span class="pplot" style="background:${col[k]}">${esc(LB.chip(k))}</span><span>${esc([LB.info(k), ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,'')].filter(Boolean).join(' — '))}${pe&&plFini(pe)?' ✓':''}</span></${print?'div':'button'}>`; }).join('');
     const svg=ppPlanSVG(ch,pc,hl,{hit:true});
     return print?`<p class="small" style="margin:10px 0 4px"><b>${esc(L('Plan : ','Plano: ')+pc)}</b> · ${esc(L('départ côté ','inicio lado ')+ppDepart(ch,pc)+(ppRight(ch,pc)?L(' (à droite du plan)',' (a la derecha del plano)'):L(' (à gauche du plan)',' (a la izquierda del plano)')))}</p><div style="overflow:hidden">${ppPlanSVG(ch,pc,null,{fit:true})}</div><div class="pplgs">${legend}</div>`
-    :`<div class="card" style="gap:10px"><div class="hhead"><h3 class="ctitle" style="margin:0">🗺️ ${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h3></div>
+    :`<div class="card" style="gap:10px"><div class="hhead"><h3 class="ctitle" style="margin:0">🗺️ ${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h3>${S.obEd===pc?'':`<button class="ghost tlsm" type="button" data-obed="${esc(pc)}">🌳 ${esc(L('Zones (arbres, béton…)','Zonas (árboles, hormigón…)'))}</button>`}</div>
+      ${S.obEd===pc?obEdHTML(ch,pc):''}
       <p class="note" style="margin:0">${esc(L('Buttes numérotées depuis le côté de départ. Longueurs à peu près réelles quand elles sont indiquées. ','Camellones numerados desde el lado de inicio. Largos casi reales cuando están indicados. ')+L('Trait noir = étiquette (changement de lot). Touche un lot pour le surligner.','Raya negra = etiqueta (cambio de lote). Toca un lote para resaltarlo.'))}</p>
       <details class="gsec ppset"${S.ppSetOpen?' open':''}><summary>⚙️ ${esc(L('Réglages du plan (sens, longueurs)','Ajustes del plano (sentido, largos)'))}</summary><div class="gsecb" style="display:grid;gap:10px">
       ${ppOrientHTML(ch,pc)}
@@ -3708,6 +3808,8 @@ function ppPlanCardHTML(ch, print){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch
       <div class="row"><button class="ghost" type="button" data-ppprint="${esc(pc)}">🖨️ ${esc(L('Imprimer le plan','Imprimir el plano'))}</button><button class="ghost" type="button" data-ppxlsx="${esc(pc)}">📊 ${esc(L('Fichier Excel','Archivo Excel'))}</button></div><div class="status" data-ppxst="${esc(pc)}"></div></div>`; }).join(''); }
 function ppObstHTML(ch,pc){ const L_=ppObst(ch,pc); const pre=S.obPre&&S.obPre.pc===pc?S.obPre:null; const k0=(S.obKind)||'arbre';
   return `<details class="gsec ppobst"${S.ppObOpen||pre?' open':''} data-parc="${esc(pc)}"><summary>🌳 ${esc(L('Zones non plantables (arbres, dalles…)','Zonas sin plantar (árboles, losas…)'))}${L_.length?' ('+L_.length+')':''}</summary><div class="gsecb" style="display:grid;gap:8px">
+    <button class="primary" type="button" data-obed="${esc(pc)}">✏️ ${esc(L('Dessiner et déplacer les zones sur le plan','Dibujar y mover las zonas en el plano'))}</button>
+    <p class="hint" style="margin:0">${esc(L('Ou avec les chiffres :','O con las cifras:'))}</p>
     ${L_.length?`<div class="cvhist">${L_.map(o=>`<div class="tlhi"><span>${esc(obTxt(o))}</span><button type="button" class="ghost tlsm tldel" data-obdel="${esc(o.id)}" data-parc="${esc(pc)}" aria-label="${esc(L('Supprimer','Eliminar'))}">🗑</button></div>`).join('')}</div>`:`<p class="hint" style="margin:0">${esc(L('Aucune zone notée.','Ninguna zona anotada.'))}</p>`}
     <div class="seg ppobk" data-v="${k0}">${OBK().map(([k,i,t])=>`<button type="button" data-v="${k}" aria-pressed="${k===k0}">${i} ${esc(t)}</button>`).join('')}</div>
     <div class="ppbrow"><span>${esc(L('Buttes','Camellones'))}</span><input class="num" data-ob="b1" inputmode="numeric" value="${pre?pre.b:''}"><span>${esc(L('à','a'))}</span><input class="num" data-ob="b2" inputmode="numeric" value="${pre?pre.b:''}"></div>
@@ -3741,6 +3843,8 @@ function ppButPanel(ch,pc){ const sb=S.ppBut; if(!sb) return ''; const pass=ppPa
       <button class="ghost" type="button" id="ppb-terrain">✏️ ${esc(L('Corriger tout le passage ','Corregir toda la pasada ')+e.n+L(' sur le terrain',' en el terreno'))}</button></div></div>`; }
 function bindPlanEdit(ch, root){ const y0=()=>window.scrollY; const again=()=>{ const y=y0(); const sx=[...document.querySelectorAll('.ppplanw')].map(w=>[w.scrollLeft,w.scrollTop]); renderChauffe(); window.scrollTo({top:y}); document.querySelectorAll('.ppplanw').forEach((w,i)=>{ if(sx[i]){ w.scrollLeft=sx[i][0]; w.scrollTop=sx[i][1]; } }); };
   root.querySelectorAll('.ppbhit').forEach(r=>r.addEventListener('click',()=>{ S.ppBut={id:r.dataset.pid, i:Number(r.dataset.pi)}; again(); }));
+  root.querySelectorAll('[data-obed]').forEach(b=>b.onclick=()=>{ S.obEd=b.dataset.obed; S.obSel=null; S.obAdd=null; S.obPan=false; S.ppSetOpen=false; again(); setTimeout(()=>{ const e=$('ob-ed'); if(e) e.scrollIntoView({block:'start'}); },60); });
+  { const e=root.querySelector('#ob-ed'); if(e) bindObEd(ch,e.dataset.parc,again); }
   root.querySelectorAll('.ppcfg').forEach(b=>b.onclick=async()=>{ const k=b.dataset.key, v=b.dataset.v; if(k==='depart') await ppSetSide(ch,b.dataset.parc,v); else await ppSetParcCfg(ch,b.dataset.parc,{[k]:v}); S.ppBut=null; again(); });
   root.querySelectorAll('details.ppset').forEach(d=>d.addEventListener('toggle',()=>{ S.ppSetOpen=d.open; }));
   root.querySelectorAll('details.ppobst').forEach(d=>d.addEventListener('toggle',()=>{ S.ppObOpen=d.open; if(!d.open) S.obPre=null; }));
@@ -3769,7 +3873,7 @@ function bindPlanEdit(ch, root){ const y0=()=>window.scrollY; const again=()=>{ 
   if($('ppb-add')) $('ppb-add').onchange=async()=>{ const v=$('ppb-add').value; if(!v) return; const {c,lot}=ppKs(v); const e=JSON.parse(JSON.stringify(ppPass(ch,pc).find(p=>p.id===e0.id))); e.b=e.b||[[],[],[]]; const seq=e.b[i]=e.b[i]||[]; const last=seq[seq.length-1];
     if(last&&ppXK(last,e)===v){ toast(L('Ce lot est déjà le dernier de la butte.','Este lote ya es el último del camellón.')); $('ppb-add').value=''; return; }
     seq.push({lot:String(lot), c, t:nowIso()}); await ppSave(e); toast(L('Lot ajouté à la butte.','Lote agregado al camellón.')); again(); };
-  if($('ppb-obst')) $('ppb-obst').onclick=()=>{ S.obPre={pc, b}; S.ppSetOpen=true; S.ppObOpen=true; again(); setTimeout(()=>{ const d=document.querySelector('details.ppobst[open]'); if(d){ d.scrollIntoView({block:'center'}); const i=d.querySelector('[data-ob="from"]'); if(i) i.focus(); } },60); };
+  if($('ppb-obst')) $('ppb-obst').onclick=()=>{ S.obEd=pc; S.obAdd='arbre'; S.obSel=null; S.ppBut=null; again(); setTimeout(()=>{ const e=$('ob-ed'); if(e) e.scrollIntoView({block:'start'}); },60); }; if(false) $('ppb-obst').onclick=()=>{ S.obPre={pc, b}; S.ppSetOpen=true; S.ppObOpen=true; again(); setTimeout(()=>{ const d=document.querySelector('details.ppobst[open]'); if(d){ d.scrollIntoView({block:'center'}); const i=d.querySelector('[data-ob="from"]'); if(i) i.focus(); } },60); };
   if($('ppb-terrain')) $('ppb-terrain').onclick=()=>{ S.tab='plant'; S.plView='terrain'; S.ppParc=pc; S.ppCur=e0.id; S.ppSel=[0,1,2].map(j=>j===i); S.ppBut=null; renderChauffe(); setTimeout(()=>{ const c=$('pp-card'); if(c) c.scrollIntoView({block:'start'}); },40); };
   const saveSegs=async ms=>{ const pass=ppPass(ch,pc); const e=JSON.parse(JSON.stringify(pass.find(p=>p.id===e0.id))); const seq=e.b[i]; const Lb=ppLen(ch,pc,b)||200; let acc=0;
     for(let k=0;k<seq.length-1;k++){ acc+=Math.max(0,ms[k]); seq[k+1].f=Math.min(0.99,Math.max(0.01,acc/Lb)); }
