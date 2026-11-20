@@ -564,6 +564,8 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
 .obz{cursor:grab}.obz.on rect{filter:drop-shadow(0 0 3px rgba(194,65,12,.6))}.obn{font-size:10px;fill:var(--muted)}
 .obselc{display:grid;gap:8px;background:var(--sunk);border-radius:10px;padding:10px}
 .hcst{font-size:12.5px;font-weight:600;color:var(--muted)}.hcst.ok{color:var(--ok)}
+@media print{.pppage{break-after:page;page-break-after:always}.pppage:last-child{break-after:auto;page-break-after:auto}}
+.pppage+.pppage{margin-top:14px}
 </style>
 </head>
 <body>
@@ -584,7 +586,7 @@ button,.seg button,select,input[type=checkbox]{touch-action:manipulation}
    Chaque note = une « entrée » avec id unique, auteur, majLe et
    éventuellement supprime:true (pour que les suppressions se partagent).
    ==================================================================== */
-const APP_VERSION = '2.86.0';
+const APP_VERSION = '2.87.0';
 const appVer = () => APP_VERSION;
 const APP_NAME = 'Journal de pépinière';
 const EXPORT_FORMAT = 'journal-chauffes';
@@ -683,10 +685,10 @@ const isMine = e => S.me && e.auteurId===S.me.id;
 
 function saveErrText(x){ const n=x&&x.name||''; return n==='QuotaExceededError'?L("Enregistrement impossible : la mémoire de l'appareil est pleine. Libère de la place (photos, apps) puis réessaie.","No se pudo guardar: la memoria del dispositivo está llena. Libera espacio y vuelve a intentar.")
   :L("Enregistrement impossible pour l'instant. Ferme complètement l'app (balaie-la vers le haut), rouvre-la et réessaie : rien de ce qui est déjà noté n'est perdu.","No se pudo guardar por ahora. Cierra la app por completo, ábrela de nuevo y vuelve a intentar: nada de lo ya anotado se pierde.")+(n?' ('+n+')':''); }
-async function saveEntry(e){ if(typeof ppDirCache!=='undefined') ppDirCache=null; e.majLe=nowIso(); await DB.put('entrees',e); const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); try{ await autoAfterSave([e]); }catch(err){ console.warn('auto',err); } }
-async function saveChauffe(c){ c.majLe=nowIso(); await DB.put('chauffes',c); const i=S.chauffes.findIndex(x=>x.id===c.id); if(i>=0) S.chauffes[i]=c; else S.chauffes.push(c); Sync.mark('chauffe',c.id); }
+async function saveEntry(e){ if(typeof ppDirCache!=='undefined') ppDirCache=null; ppColCache=null; e.majLe=nowIso(); await DB.put('entrees',e); const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); try{ await autoAfterSave([e]); }catch(err){ console.warn('auto',err); } }
+async function saveChauffe(c){ ppColCache=null; c.majLe=nowIso(); await DB.put('chauffes',c); const i=S.chauffes.findIndex(x=>x.id===c.id); if(i>=0) S.chauffes[i]=c; else S.chauffes.push(c); Sync.mark('chauffe',c.id); }
 async function removeEntry(e){ const t=Object.assign({},e,{supprime:true}); await saveEntry(t); }
-async function saveEntries(list){ if(!list.length) return; if(typeof ppDirCache!=='undefined') ppDirCache=null; const t=nowIso(); list.forEach(e=>e.majLe=t); await DB.putMany('entrees',list); list.forEach(e=>{ const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); });  try{ await autoAfterSave(list); }catch(err){ console.warn('auto',err); } }
+async function saveEntries(list){ if(!list.length) return; if(typeof ppDirCache!=='undefined') ppDirCache=null; ppColCache=null; const t=nowIso(); list.forEach(e=>e.majLe=t); await DB.putMany('entrees',list); list.forEach(e=>{ const i=S.entrees.findIndex(x=>x.id===e.id); if(i>=0) S.entrees[i]=e; else S.entrees.push(e); Sync.mark('entree',e.id); });  try{ await autoAfterSave(list); }catch(err){ console.warn('auto',err); } }
 
 /* ---------- Données dérivées d'une chauffe ---------- */
 function myObs(cid, jour){ return entriesOf(cid,'obs').find(e=>e.jour===jour && isMine(e)); }
@@ -2360,7 +2362,7 @@ function renderSettings(){
 
 /* ---------- Vue d'une chauffe ---------- */
 let dirty=false;
-function renderChauffe(){ ppDirCache=null;
+function renderChauffe(){ ppDirCache=null; ppColCache=null;
   const ch=chGrow(curChauffe()); const n=lastDay(ch); const grp=dosGroup(ch); const DOS=grp?dossierOf(ch):null;
   if(S.jour>ch.duree) S.jour=ch.duree;
   if(S.dosDet&&S.dosDet!==S.tab) S.dosDet=null;
@@ -3543,10 +3545,26 @@ function ppLab(ch){ const multi=ppGroup(ch).length>1; const AL=ppAllLots(ch); co
     chip:k=>{ const {c,lot}=ppKs(k); return cnt[lot]>1?lot+'·'+ppShort(ppSai(c)):lot; },
     info:k=>{ const x=by[k]; const {c}=ppKs(k); const l=x?x.l:{}; return [x&&x.hc?hcCatTxt(l.cat):multi?(x?x.sai:ppSai(c)):'', [l.variete,l.pg].filter(Boolean).join(' / ')].filter(Boolean).join(' · '); },
     l:k=>(by[k]||{}).l||{} }; }
-function ppColors(ch){ const ks=[...new Set([].concat(...ppAllPass(ch).map(p=>[].concat(...(p.b||[]).map(q=>(q||[]).map(x=>ppXK(x,p)))))).concat(ppAllLots(ch).map(x=>x.k)))];
-  const used=new Set(ppAllPass(ch).length?[].concat(...ppAllPass(ch).map(p=>[].concat(...(p.b||[]).map(q=>(q||[]).map(x=>ppXK(x,p)))))):[]);
-  ks.sort((a,b)=>(used.has(b)-used.has(a))||a.localeCompare(b,undefined,{numeric:true}));
-  const m={}; ks.forEach((k,i)=>m[k]=['#4a4278','#2e7a2c','#a42a45','#b9862a','#2f6fc0','#0f8a8a','#8a4fb0','#c2602b','#5b7d1e','#7a5c3a','#d0533f','#3d8fb0'][i%12]); return m; }
+var ppColCache=null;
+const PP_PAL=['#4a4278','#2e7a2c','#c0392b','#d49a1e','#2f6fc0','#0f8a8a','#8a4fb0','#c2602b','#6d8f1e','#7a5c3a','#e86a92','#3d8fb0','#b03a7a','#1f5c4a','#9c7a10','#5560c9','#3fa36b','#8c2f2f','#b98ad6','#e08a3c','#2b4a6b','#77a8d9','#a3a33a','#5e5e5e'];
+/* morceaux d'une butte en positions réelles (0 = début de la butte, côté où part le passage 1) */
+function ppBSegs(pass,e,i){ const seq=((e.b||[])[i]||[]); if(!seq.length) return []; const up=ppAller(e); const fr=ppFr(pass,e,i).concat([1]);
+  return seq.map((x,k)=>({k:ppXK(x,e), a:up?fr[k]:1-fr[k+1], z:up?fr[k+1]:1-fr[k]})).sort((p,q)=>p.a-q.a); }
+/* n couleurs (ou motifs) : dans l'ordre de plantation, chaque lot prend la couleur la moins utilisée
+   et la plus ancienne parmi celles que n'ont pas ses voisins (même butte ou butte d'à côté) */
+function ppAssign(ch,n){ ppColCache=ppColCache||{}; const ck=ch.id+'|'+n; if(ppColCache[ck]) return ppColCache[ck];
+  const order=[], seen=new Set(), adj={}; const add=k=>{ if(!seen.has(k)){ seen.add(k); order.push(k); } adj[k]=adj[k]||new Set(); };
+  const link=(a,b)=>{ if(a===b) return; add(a); add(b); adj[a].add(b); adj[b].add(a); };
+  ppParcs(ch).forEach(pc=>{ const pass=ppPass(ch,pc); const byB={};
+    pass.slice().sort((a,b)=>a.n-b.n).forEach(e=>[0,1,2].forEach(i=>{ const bt=ppButte(e,i); const sg=ppBSegs(pass,e,i); if(!sg.length) return; byB[bt]=(byB[bt]||[]).concat(sg); sg.forEach(x=>add(x.k)); for(let j=1;j<sg.length;j++) link(sg[j-1].k,sg[j].k); }));
+    Object.keys(byB).map(Number).forEach(bt=>{ [bt+1,bt+2].forEach(o=>{ const nb=byB[o]; if(!nb) return; byB[bt].forEach(x=>nb.forEach(y=>{ if(x.a<y.z-.01&&y.a<x.z-.01) link(x.k,y.k); })); }); }); });
+  ppAllLots(ch).map(x=>x.k).forEach(add);
+  const use=Array(n).fill(0), last=Array(n).fill(-1), m={};
+  order.forEach((k,step)=>{ const forb=new Set([...adj[k]].filter(x=>x in m).map(x=>m[x])); let best=-1;
+    for(let c=0;c<n;c++){ if(forb.has(c)) continue; if(best<0||use[c]<use[best]||(use[c]===use[best]&&last[c]<last[best])) best=c; }
+    if(best<0){ best=0; for(let c=1;c<n;c++) if(use[c]<use[best]) best=c; } m[k]=best; use[best]++; last[best]=step; });
+  return ppColCache[ck]=m; }
+function ppColors(ch){ const m=ppAssign(ch,PP_PAL.length); const o={}; Object.keys(m).forEach(k=>o[k]=PP_PAL[m[k]]); return o; }
 /* Où est chaque lot (clé saison|lot) : buttes entières regroupées, morceaux de butte précisés */
 function ppWhere(ch){ const out={};
   ppParcs(ch).forEach(parc=>ppPass(ch,parc).forEach(e=>(e.b||[]).forEach((seq,i)=>{ seq=seq||[]; seq.forEach((x,k)=>{ const key=ppXK(x,e); const part=seq.length===1?'':(k===0?L('début','inicio'):k===seq.length-1?L('fin','final'):L('milieu','medio'));
@@ -3703,7 +3721,7 @@ function ppPat(id,i){ const P=[
   '<rect width="8" height="8" fill="#fff"/><circle cx="2" cy="2" r="1.1" fill="#000"/><circle cx="6" cy="6" r="1.1" fill="#000"/>',
   '<rect width="8" height="8" fill="#d0d0d0"/><path d="M0 4h8" stroke="#000" stroke-width="1.2"/>'];
   return `<pattern id="${id}" width="8" height="8" patternUnits="userSpaceOnUse">${P[i%P.length]}</pattern>`; }
-const ppPatIdx=(ch,k)=>{ const col=ppColors(ch); return Object.keys(col).indexOf(k); };
+const ppPatIdx=(ch,k)=>{ const m=ppAssign(ch,12); return k in m?m[k]:0; };
 function ppSwatch(ch,k){ const i=ppPatIdx(ch,k); return `<svg width="34" height="18" viewBox="0 0 34 18" style="flex:none"><defs>${ppPat('sw'+i,i)}</defs><rect x=".5" y=".5" width="33" height="17" rx="3" fill="url(#sw${i})" stroke="#000"/></svg>`; }
 /* ===== Longueurs réelles : longueur de chaque butte (m) + position de chaque étiquette =====
    Réglages de parcelle dans plparcs : {nom, depart, lenDef (m), len:{numéro de butte: m}}.
@@ -3742,24 +3760,24 @@ const ppOff=(ch,parc,b)=>{ const x=ppParcCfg(ch,parc).x; const v=x&&x.off&&x.off
 function ppArr(ch,parc,up){ if(ppOrient(ch,parc)!=='h') return up?'↑':'↓'; const l=ppHStart(ch,parc)==='gauche'; return up?(l?'→':'←'):(l?'←':'→'); }
 function ppPlanSVG(ch, parc, hl, opt){ opt=opt||{}; const pass=ppPass(ch,parc); if(!pass.length) return ''; const LB=ppLab(ch); const col=ppColors(ch);
   const HZ=ppOrient(ch,parc)==='h', R=ppRight(ch,parc), FB=ppHFirst(ch,parc)==='bas', SL=ppHStart(ch,parc)==='gauche';
-  const N=Math.max(...pass.map(e=>ppButte(e,2)));
-  const bw=HZ?(N>60?10:N>30?14:20):(N>40?18:N>20?22:28), gap=HZ?(N>60?2:3):(N>40?3:4);
+  const N=Math.max(...pass.map(e=>ppButte(e,2))); const RG=opt.range, B1=RG?Math.max(1,RG[0]):1, B2=RG?Math.min(N,RG[1]):N, N0=B2-B1+1;
+  const bw=HZ?(N0>60?10:N0>30?14:20):(N0>40?18:N0>20?22:28), gap=HZ?(N0>60?2:3):(N0>40?3:4);
   const nums=opt.nums!==false;
   // marges
-  const T=HZ?8:30, XL=HZ?(nums?62:40):8, Lpx=HZ?(opt.fit?900:620):(opt.fit?Math.max(200,Math.min(420,(N*(bw+gap))*0.45)):300), B=HZ?8:(nums?26:8);
+  const T=HZ?8:30, XL=HZ?(nums?62:40):8, Lpx=HZ?(opt.fit?900:620):(opt.fit?Math.max(200,Math.min(420,(N0*(bw+gap))*0.45)):300), B=HZ?8:(nums?26:8);
   const lens=[], offs=[]; for(let b=1;b<=N;b++){ lens[b]=ppLen(ch,parc,b); offs[b]=ppOff(ch,parc,b); }
   const Lmax=Math.max(0,...lens.map((v,b)=>v?v+(offs[b]||0):0).filter(Boolean));
   const lenPx=b=>Lmax&&lens[b]?Math.max(24,Lpx*lens[b]/Lmax):Lpx; const offPx=b=>Lmax&&offs[b]?Lpx*offs[b]/Lmax:0;
-  const pos=b=>HZ?(FB?(N-b):(b-1)):(R?(N-b):(b-1));      // rang de la butte (gauche→droite en vertical, haut→bas en horizontal)
+  const pos=b=>HZ?(FB?(B2-b):(b-B1)):(R?(B2-b):(b-B1));      // rang de la butte (gauche→droite en vertical, haut→bas en horizontal)
   const across=b=>(HZ?T:XL)+pos(b)*(bw+gap);
-  const W=HZ?XL+Lpx+8:XL*2+N*bw+(N-1)*gap, Ht=HZ?T+N*bw+(N-1)*gap+B:T+Lpx+B;
+  const W=HZ?XL+Lpx+8:XL*2+N0*bw+(N0-1)*gap, Ht=HZ?T+N0*bw+(N0-1)*gap+B:T+Lpx+B;
   // rectangle d'un morceau de butte : v0..v1 = distance depuis le début de la butte (côté où commence l'aller)
   const box=(b,v0,v1)=>{ const a=across(b); if(!HZ) return {x:a, y:T+Lpx-v1, w:bw, h:v1-v0}; return SL?{x:XL+v0, y:a, w:v1-v0, h:bw}:{x:XL+Lpx-v1, y:a, w:v1-v0, h:bw}; };
   const sel=opt.hit&&S.ppBut; let g='';
-  pass.forEach(e=>{ const up=ppAller(e); const a0=Math.min(across(ppButte(e,0)),across(ppButte(e,2)));
+  pass.forEach(e=>{ const up=ppAller(e); const bIn=[0,1,2].map(i=>ppButte(e,i)).filter(b=>b>=B1&&b<=B2); if(!bIn.length) return; const a0=Math.min(...bIn.map(across)), nb=bIn.length;
     const pl='P'+e.n+' '+ppArr(ch,parc,up);
-    g+=HZ?`<text x="4" y="${a0+(3*bw+2*gap)/2}" dominant-baseline="central" class="pps">${pl}</text>`:`<text x="${a0+(3*bw+2*gap)/2}" y="12" text-anchor="middle" class="pps">${pl}</text>`;
-    [0,1,2].forEach(i=>{ const b=ppButte(e,i), seq=((e.b||[])[i]||[]); const Lb=lenPx(b), Ob=offPx(b); const whole=box(b,Ob,Ob+Lb);
+    g+=HZ?`<text x="4" y="${a0+(nb*bw+(nb-1)*gap)/2}" dominant-baseline="central" class="pps">${pl}</text>`:`<text x="${a0+(nb*bw+(nb-1)*gap)/2}" y="12" text-anchor="middle" class="pps">${pl}</text>`;
+    [0,1,2].forEach(i=>{ const b=ppButte(e,i), seq=((e.b||[])[i]||[]); if(b<B1||b>B2) return; const Lb=lenPx(b), Ob=offPx(b); const whole=box(b,Ob,Ob+Lb);
       if(!seq.length){ g+=`<rect x="${whole.x}" y="${whole.y}" width="${whole.w}" height="${whole.h}" rx="2" fill="none" stroke="#9a948a" stroke-dasharray="4 3"/>`; }
       else { const n=seq.length, GP=n>1?6:0, fr=ppFr(pass,e,i).concat([1]);
         // un lot k va de fr[k] à fr[k+1] dans le sens de plantation ; au retour on part de l'autre bout
@@ -3767,7 +3785,7 @@ function ppPlanSVG(ch, parc, hl, opt){ opt=opt||{}; const pass=ppPass(ch,parc); 
           const startCut=k>0, endCut=k<n-1; if(up){ if(startCut) v0+=GP/2; if(endCut) v1-=GP/2; } else { if(startCut) v1-=GP/2; if(endCut) v0+=GP/2; }
           if(v1-v0<3){ const m=(v0+v1)/2; v0=m-1.5; v1=m+1.5; } return [v0,v1]; };
         seq.forEach((xx,k)=>{ const key=ppXK(xx,e); const [v0,v1]=seg(k); const r=box(b,v0,v1); const dim=hl&&hl!==key;
-          const fill=opt.bw?`url(#pp-pat${ppPatIdx(ch,key)})`:(col[key]||'#4a4278');
+          const fill=opt.bw?`url(#pp-pat${opt.pid||''}${ppPatIdx(ch,key)})`:(col[key]||'#4a4278');
           g+=`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="1.5" fill="${fill}" stroke="${opt.bw?'#000':'rgba(0,0,0,.25)'}"${opt.bw?' stroke-width="1.2"':''}${dim?' opacity=".18"':''}/>`;
           const lab=LB.chip(key), len=v1-v0, cx=r.x+r.w/2, cy=r.y+r.h/2;
           if(opt.labels!==false&&len>=lab.length*7.5+12&&bw>=11){ const tw=lab.length*7+6;
@@ -3777,13 +3795,13 @@ function ppPlanSVG(ch, parc, hl, opt){ opt=opt||{}; const pass=ppPass(ch,parc); 
           g+=HZ?(()=>{ const X=SL?XL+v:XL+Lpx-v; return `<line x1="${X}" x2="${X}" y1="${a-3}" y2="${a+bw+3}" stroke="#111" stroke-width="2.2"/>`; })():`<line x1="${a-3}" x2="${a+bw+3}" y1="${T+Lpx-v}" y2="${T+Lpx-v}" stroke="#111" stroke-width="2.2"/>`; } }
       if(opt.hit){ const on=sel&&sel.id===e.id&&sel.i===i; if(on) g+=`<rect x="${whole.x-2.5}" y="${whole.y-2.5}" width="${whole.w+5}" height="${whole.h+5}" rx="3" fill="none" stroke="var(--accent)" stroke-width="3"/>`;
         const a=across(b); g+=HZ?`<rect class="ppbhit" data-pid="${esc(e.id)}" data-pi="${i}" x="${XL-4}" y="${a-gap/2}" width="${Lpx+8}" height="${bw+gap}" fill="transparent"/>`:`<rect class="ppbhit" data-pid="${esc(e.id)}" data-pi="${i}" x="${a-gap/2}" y="${T-4}" width="${bw+gap}" height="${Lpx+8}" fill="transparent"/>`; }
-      if(nums&&(N<=40||b%5===0||b===1)){ const a=across(b); g+=HZ?`<text x="${XL-6}" y="${a+bw/2}" text-anchor="end" dominant-baseline="central" class="pps">${b}</text>`:`<text x="${a+bw/2}" y="${T+Lpx+16}" text-anchor="middle" class="pps">${b}</text>`; } }); });
-  ppObst(ch,parc).forEach(o=>{ const bs=[]; for(let b=Math.max(1,o.b1);b<=Math.min(N,o.b2);b++) bs.push(b); if(!bs.length) return; const cs=[];
+      if(nums&&(N0<=40||b%5===0||b===B1)){ const a=across(b); g+=HZ?`<text x="${XL-6}" y="${a+bw/2}" text-anchor="end" dominant-baseline="central" class="pps">${b}</text>`:`<text x="${a+bw/2}" y="${T+Lpx+16}" text-anchor="middle" class="pps">${b}</text>`; } }); });
+  ppObst(ch,parc).forEach(o=>{ const bs=[]; for(let b=Math.max(B1,o.b1);b<=Math.min(B2,o.b2);b++) bs.push(b); if(!bs.length) return; const cs=[];
     bs.forEach(b=>{ const Lm=lens[b]||ppLenDef(ch,parc)||200; const mpx=lenPx(b)/Lm; const v0=offPx(b)+Math.max(0,o.from)*mpx; const v1=Math.min(offPx(b)+lenPx(b), v0+Math.max(5,(o.len||2)*mpx)); const r=box(b,v0,Math.max(v0+5,v1));
       g+=`<rect x="${r.x-3}" y="${r.y}" width="${r.w+6}" height="${r.h}" rx="2" fill="url(#ppobst)" stroke="#a42a45" stroke-width="2"/>`; cs.push([r.x+r.w/2,r.y+r.h/2]); });
     const cx=(cs[0][0]+cs[cs.length-1][0])/2, cy=(cs[0][1]+cs[cs.length-1][1])/2; g+=`<circle cx="${cx}" cy="${cy}" r="10" fill="#fff" stroke="#a42a45" stroke-width="1.5"/><text x="${cx}" y="${cy+1}" text-anchor="middle" dominant-baseline="central" style="font-size:12px">${obIco(o.kind)}</text>`; });
-  const size=opt.fit||HZ?`width="100%" style="${opt.fit?'max-height:165mm;':''}print-color-adjust:exact;-webkit-print-color-adjust:exact"`:`width="${W}" height="${Ht}" style="print-color-adjust:exact;-webkit-print-color-adjust:exact"`;
-  const defs='<defs><pattern id="ppobst" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#d9d4ca"/><path d="M0 0v6" stroke="#6b665d" stroke-width="2"/></pattern>'+(opt.bw?Object.keys(col).map((k,i)=>ppPat('pp-pat'+i,i)).join(''):'')+'</defs>';
+  const size=opt.fit||HZ?`width="100%" style="${opt.fit?'max-height:'+(opt.maxh||'165mm')+';':''}print-color-adjust:exact;-webkit-print-color-adjust:exact"`:`width="${W}" height="${Ht}" style="print-color-adjust:exact;-webkit-print-color-adjust:exact"`;
+  const defs='<defs><pattern id="ppobst" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#d9d4ca"/><path d="M0 0v6" stroke="#6b665d" stroke-width="2"/></pattern>'+(opt.bw?Array.from({length:12},(_,i)=>ppPat('pp-pat'+(opt.pid||'')+i,i)).join(''):'')+'</defs>';
   return `<svg viewBox="0 0 ${W} ${Ht}" ${size} class="ppplan" role="img" aria-label="${esc(L('Plan de la parcelle ','Plano de la parcela ')+parc)}">${defs}${g}</svg>`; }
 function ppPlanCardHTML(ch, print){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch,pc).length); if(!parcs.length) return ''; const LB=ppLab(ch); const col=ppColors(ch); const W=ppWhere(ch);
   return parcs.map(pc=>{ const ks=Object.keys(W).filter(k=>W[k].some(x=>x.parc===pc)).sort(ppSortK); const hl=print?null:(S.ppHl&&ks.includes(S.ppHl)?S.ppHl:null);
@@ -3911,7 +3929,8 @@ function ppPlanXlsx(ch, parc){ const pass=ppPass(ch,parc); if(!pass.length) retu
     const rowsB=Lfull&&lens[b]?Math.max(1,Math.round(lens[b]/STEP)):ROWS; const offR=Lfull&&offs[b]?Math.round(offs[b]/STEP):0; const base=Math.max(0,ROWS-rowsB-offR); // aligné sur le début (+ décalage)
     seq.forEach((x,k)=>{ const key=ppXK(x,e); let a=Math.round(fr[k]*rowsB), z=Math.round(fr[k+1]*rowsB); if(z<=a) z=a+1; if(z>rowsB) z=rowsB; if(a>=rowsB) a=rowsB-1;
       for(let r=a;r<z;r++){ const row=up?base+rowsB-1-r:base+r; if(row>=0&&row<ROWS) grid[row][b]={k:key}; }
-      const r1=up?base+rowsB-1-a:base+a, r2=up?base+rowsB-1-(z-1):base+(z-1); [r1,r2].forEach(rr=>{ if(grid[rr]&&grid[rr][b]) grid[rr][b].lab=LB.chip(key); }); }); }); });
+      const r1=up?base+rowsB-1-a:base+a, r2=up?base+rowsB-1-(z-1):base+(z-1); const lo=Math.min(r1,r2), hi=Math.max(r1,r2); const marks=hi-lo>=24?[lo,Math.round((lo+hi)/2),hi]:[Math.round((lo+hi)/2)];
+      marks.forEach(rr=>{ if(grid[rr]&&grid[rr][b]) grid[rr][b].lab=LB.chip(key); }); }); }); });
   // styles : 0 normal, 1 titre, 2 entête, 3 numéro de butte, 4.. un par lot
   const argb=h=>'FF'+String(h||'#888888').replace('#','').toUpperCase();
   const light=h=>{ const v=parseInt(String(h).slice(1),16); const r=v>>16,g=(v>>8)&255,b=v&255; return (r*299+g*587+b*114)/1000>150; };
@@ -3934,7 +3953,7 @@ function ppPlanXlsx(ch, parc){ const pass=ppPass(ch,parc); if(!pass.length) retu
   rows.push(`<row r="1">${cell(0,1,L('Plan de plantation – ','Plano de plantación – ')+parc,1)}</row>`);
   rows.push(`<row r="2">${cell(0,2,ppGroup(ch).map(c=>c.nom).join(', ')+' · '+L('départ ','inicio ')+(R?L('à droite','a la derecha'):L('à gauche','a la izquierda'))+' · '+(Lfull?L('1 ligne = ','1 fila = ')+STEP+' m':L('longueurs non indiquées : 1 ligne = 2,5 % de la butte','largos no indicados: 1 fila = 2,5 % del camellón'))+' · '+isoFr(todayIso()))}</row>`);
   // ligne 3 : passages
-  let r3=`<row r="3">${cell(0,3,L('Passage','Pasada'),2)}`; const pRow=[]; pass.forEach(e=>{ const b=ppButte(e,R?2:0); pRow.push([colOf(b),'P'+e.n+(ppAller(e)?' ↑':' ↓')]); }); pRow.sort((a,b)=>a[0]-b[0]).forEach(([c,v])=>{ r3+=cell(c,3,v,2); }); rows.push(r3+'</row>');
+  let r3=`<row r="3">${cell(0,3,L('Passage','Pasada'),2)}`; const pRow=[]; const merges=[]; pass.forEach(e=>{ const b=ppButte(e,R?2:0); pRow.push([colOf(b),'P'+e.n+(ppAller(e)?' ↑':' ↓')]); const c0=colOf(b); if(ppButte(e,2)<=N&&!pRow.some(x=>x!==pRow[pRow.length-1]&&x[0]===c0)) merges.push(xCol(c0)+'3:'+xCol(c0+2)+'3'); }); pRow.sort((a,b)=>a[0]-b[0]).forEach(([c,v])=>{ r3+=cell(c,3,v,2); }); rows.push(r3+'</row>');
   for(let r=0;r<ROWS;r++){ const rr=4+r; let x=`<row r="${rr}" ht="11" customHeight="1">${cell(0,rr,Lfull?(ROWS-r)*STEP:'',2)}`;
     const cs=[]; for(let b=1;b<=N;b++){ const g=grid[r][b]; cs.push([colOf(b), g?gcell(colOf(b),rr,g):cell(colOf(b),rr,'',3)]); }
     cs.sort((a,b)=>a[0]-b[0]).forEach(c=>x+=c[1]); rows.push(x+'</row>'); }
@@ -3947,20 +3966,30 @@ function ppPlanXlsx(ch, parc){ const pass=ppPass(ch,parc); if(!pass.length) retu
     order.forEach((b,ix)=>{ const rr=4+ix; let x=`<row r="${rr}" ht="13" customHeight="1">${cell(0,rr,b,2)}`; const cs=[];
       for(let d=0;d<ROWS;d++){ const g=grid[ROWS-1-d][b]; cs.push([colS(d), g?gcell(colS(d),rr,g):cell(colS(d),rr,'',3)]); }
       cs.sort((a,b)=>a[0]-b[0]).forEach(c=>x+=c[1]); rows.push(x+'</row>'); }); }
-  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" zoomScale="90"><pane xSplit="1" ySplit="3" topLeftCell="B4" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="12"/><cols><col min="1" max="1" width="9" customWidth="1"/><col min="2" max="${(HZ?ROWS:N)+1}" width="3.6" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" zoomScale="90"><pane xSplit="1" ySplit="3" topLeftCell="B4" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="12"/><cols><col min="1" max="1" width="9" customWidth="1"/><col min="2" max="${(HZ?ROWS:N)+1}" width="3.6" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData>${!HZ&&merges.length?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:''}<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="0" fitToHeight="1"/></worksheet>`.replace('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">','<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>');
+  // feuille Buttes : une ligne par butte, les lots dans l'ordre depuis le début de la butte
+  const bRows=[]; let Mx=1; const byB={}; pass.forEach(e=>[0,1,2].forEach(i=>{ const b=ppButte(e,i); if(byB[b]) return; byB[b]={e,i,sg:ppBSegs(pass,e,i)}; Mx=Math.max(Mx,byB[b].sg.length); }));
+  const hdB=[L('Butte','Camellón'),L('Passage','Pasada'),L('Sens','Sentido'),L('Date','Fecha'),L('Longueur (m)','Largo (m)'),L('Zones','Zonas')]; for(let j=1;j<=Mx;j++){ hdB.push(L('Lot ','Lote ')+j); hdB.push(Lfull||Lmax?L('de … à (m)','de … a (m)'):L('de … à (%)','de … a (%)')); }
+  bRows.push(`<row r="1">${hdB.map((t,c)=>cell(c,1,t,2)).join('')}</row>`);
+  Object.keys(byB).map(Number).sort((a,b)=>a-b).forEach((b,ix)=>{ const r=ix+2; const {e,sg}=byB[b]; const Lm=lens[b]; const up=ppAller(e);
+    const pos=f=>Lm?fmtN(Math.round(f*Lm)):fmtN(Math.round(f*100)); const zs=ppObst(ch,parc).filter(o=>b>=o.b1&&b<=o.b2).map(o=>obIco(o.kind)+' '+obName(o)+L(' à ',' a ')+fmtN(o.from)+' m').join(' · ');
+    let x=`<row r="${r}">${cell(0,r,b,0)}${cell(1,r,'P'+e.n)}${cell(2,r,(up?'↑ ':'↓ ')+(up?L('depuis le début','desde el inicio'):L('depuis la fin','desde el final')))}${cell(3,r,e.date?isoFr(e.date):'')}${cell(4,r,Lm||'')}${cell(5,r,zs)}`;
+    sg.forEach((q,j)=>{ x+=cell(6+2*j,r,LB.chip(q.k),sk(q.k))+cell(7+2*j,r,pos(q.a)+' – '+pos(q.z)); }); bRows.push(x+'</row>'); });
+  const sheet3=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="2" width="8" customWidth="1"/><col min="3" max="3" width="17" customWidth="1"/><col min="4" max="5" width="11" customWidth="1"/><col min="6" max="6" width="22" customWidth="1"/><col min="7" max="${6+2*Mx}" width="11" customWidth="1"/></cols><sheetData>${bRows.join('')}</sheetData><autoFilter ref="A1:${xCol(5+2*Mx)}${bRows.length}"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
   // feuille Lots
   const lr=[`<row r="1">${cell(0,1,L('Couleur','Color'),2)}${cell(1,1,L('Lot','Lote'),2)}${cell(2,1,L('Saison','Temporada'),2)}${cell(3,1,L('Variété','Variedad'),2)}${cell(4,1,L('Porte-greffe','Portainjerto'),2)}${cell(5,1,L('Où','Dónde'),2)}${cell(6,1,L('Fini','Terminado'),2)}</row>`];
   keys.forEach((k,i)=>{ const r=i+2; const {c,lot}=ppKs(k); const l=LB.l(k); const pe=plLotOf({id:c},lot);
     lr.push(`<row r="${r}">${cell(0,r,LB.chip(k),sk(k))}${cell(1,r,lot)}${cell(2,r,ppSai(c))}${cell(3,r,l.variete||'')}${cell(4,r,l.pg||'')}${cell(5,r,ppWhereTxt(W[k].filter(x=>x.parc===parc)).replace(/^[^:]*: /,''),WRAP)}${cell(6,r,pe&&plFini(pe)?L('oui','sí'):'')}</row>`); });
   const sheet2=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="9" customWidth="1"/><col min="2" max="2" width="8" customWidth="1"/><col min="3" max="3" width="16" customWidth="1"/><col min="4" max="5" width="16" customWidth="1"/><col min="6" max="6" width="60" customWidth="1"/><col min="7" max="7" width="8" customWidth="1"/></cols><sheetData>${lr.join('')}</sheetData></worksheet>`;
   const files=[
-    {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
+    {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
     {name:'_rels/.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
-    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xEsc(L('Plan','Plano'))}" sheetId="1" r:id="rId1"/><sheet name="${xEsc(L('Lots','Lotes'))}" sheetId="2" r:id="rId2"/></sheets></workbook>`},
-    {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xEsc(L('Plan','Plano'))}" sheetId="1" r:id="rId1"/><sheet name="${xEsc(L('Buttes','Camellones'))}" sheetId="3" r:id="rId4"/><sheet name="${xEsc(L('Lots','Lotes'))}" sheetId="2" r:id="rId2"/></sheets></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/></Relationships>`},
     {name:'xl/styles.xml', data:styles},
     {name:'xl/worksheets/sheet1.xml', data:sheet1},
-    {name:'xl/worksheets/sheet2.xml', data:sheet2}];
+    {name:'xl/worksheets/sheet2.xml', data:sheet2},
+    {name:'xl/worksheets/sheet3.xml', data:sheet3}];
   return zipStore(files); }
 async function ppExportXlsx(ch, parc, st){ try{ const blob=ppPlanXlsx(ch,parc); if(!blob) return; shareFile(new File([blob], slug(L('plan-','plano-')+parc)+'.xlsx', {type:blob.type}), st, L('Fichier Excel prêt : il s\'ouvre dans Excel ou Numbers.','Archivo Excel listo: se abre en Excel o Numbers.')); }catch(e){ console.error(e); if(st){ st.textContent=L('Export impossible : ','Exportación imposible: ')+e.message; st.className='status err'; } } }
 /* Changer le côté de départ d'une parcelle (commun à toutes les saisons du groupe) */
@@ -3969,26 +3998,31 @@ async function ppSetSide(ch, parc, v){ const dep=v==='droite'?L('droite','derech
   if(!done){ await saveChauffe(Object.assign({},ch,{plparcs:(ch.plparcs||[]).concat([{nom:parc, depart:dep}])})); } }
 /* Page d'impression du plan : plan + légende, écritures au choix */
 function renderPlanPrint(){ const ch=curChauffe(); const pc=S.ppPrintParc; if(!ch||!pc){ return go('chauffe',{tab:'hist'}); }
-  const o=S.ppPO=S.ppPO||{bw:true, labels:true, nums:true, vari:true, where:false, title:true};
-  const LB=ppLab(ch); const col=ppColors(ch); const W=ppWhere(ch); const ks=Object.keys(W).filter(k=>W[k].some(x=>x.parc===pc)).sort(ppSortK);
-  const legend=ks.map(k=>`<div class="pplgp">${o.bw?ppSwatch(ch,k)+`<b style="font-size:15px">${esc(LB.chip(k))}</b>`:`<span class="pplot" style="background:${col[k]};print-color-adjust:exact;-webkit-print-color-adjust:exact">${esc(LB.chip(k))}</span>`}${o.vari&&LB.info(k)?`<span>${esc(LB.info(k))}</span>`:''}${o.where?`<small>${esc(ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,''))}</small>`:''}</div>`).join('');
+  const o=S.ppPO=S.ppPO||{bw:true, labels:true, nums:true, vari:true, where:false, title:true}; if(!o.per) o.per=30;
+  const LB=ppLab(ch); const col=ppColors(ch); const W=ppWhere(ch); const ks0=Object.keys(W).filter(k=>W[k].some(x=>x.parc===pc)).sort(ppSortK);
+  const pass=ppPass(ch,pc); const N=Math.max(...pass.map(e=>ppButte(e,2))); const per=o.per==='all'?N:Number(o.per); const pages=[]; for(let b=1;b<=N;b+=per) pages.push([b,Math.min(N,b+per-1)]);
+  const kIn=(b1,b2)=>{ const S_=new Set(); pass.forEach(e=>[0,1,2].forEach(i=>{ const b=ppButte(e,i); if(b<b1||b>b2) return; ((e.b||[])[i]||[]).forEach(x=>S_.add(ppXK(x,e))); })); return ks0.filter(k=>S_.has(k)); };
+  const legendOf=ks=>ks.map(k=>`<div class="pplgp">${o.bw?ppSwatch(ch,k)+`<b style="font-size:15px">${esc(LB.chip(k))}</b>`:`<span class="pplot" style="background:${col[k]};print-color-adjust:exact;-webkit-print-color-adjust:exact">${esc(LB.chip(k))}</span>`}${o.vari&&LB.info(k)?`<span>${esc(LB.info(k))}</span>`:''}${o.where?`<small>${esc(ppWhereTxt(W[k].filter(x=>x.parc===pc)).replace(/^[^:]*: /,''))}</small>`:''}</div>`).join('');
+  const head=(b1,b2,i)=>o.title?`<h2 style="margin:0 0 2px;font-size:20px">${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}${pages.length>1?` · ${esc(L('buttes ','camellones ')+b1+'–'+b2)}`:''}</h2><p class="small" style="margin:0 0 6px">${esc(ppGroup(ch).map(c=>c.nom).join(', ')+' · '+L('départ ','inicio ')+(ppRight(ch,pc)?L('à droite','a la derecha'):L('à gauche','a la izquierda'))+' · '+isoFr(todayIso())+(pages.length>1?' · '+L('page ','página ')+(i+1)+'/'+pages.length:''))}</p>`:'';
   const opts=[['bw',L('Noir et blanc (un motif par lot)','Blanco y negro (un motivo por lote)')],['title',L('Titre','Título')],['labels',L('Numéros dans les buttes','Números en los camellones')],['nums',L('Numéros des buttes','Números de camellones')],['vari',L('Variété / porte-greffe','Variedad / portainjerto')],['where',L('Buttes de chaque lot','Camellones de cada lote')]];
   app.innerHTML=`<style>@media print{@page{size:landscape;margin:8mm}}</style><header class="top noprint"><div class="title-row"><div class="left"><button class="back" id="r-back" type="button" aria-label="Retour">‹</button><h1>${esc(L('Imprimer le plan','Imprimir el plano'))}</h1></div></div></header>
   <section class="panel">
     <div class="card noprint" style="gap:10px"><span class="lab">${esc(L('Ce qui est écrit sur la feuille','Lo que se escribe en la hoja'))}</span>
+      <div class="field"><span class="lab">${esc(L('Buttes par page','Camellones por página'))}</span><div class="seg" id="r-per">${[[15,'15'],[30,'30'],[45,'45'],[60,'60'],['all',L('Tout sur 1 page','Todo en 1 página')]].map(([v,t])=>`<button type="button" data-v="${v}" aria-pressed="${String(o.per)===String(v)}">${esc(t)}</button>`).join('')}</div><small class="hint">${esc(L('→ ','→ ')+plural(pages.length,'page','pages','página','páginas')+L(' en paysage. Moins de buttes par page = plan plus grand.',' en horizontal. Menos camellones por página = plano más grande.'))}</small></div>
       <div class="ppopts">${opts.map(([k,t])=>`<label class="pcrow" style="grid-template-columns:auto 1fr"><input type="checkbox" data-po="${k}"${o[k]?' checked':''}><span style="color:var(--fg);font-size:15px">${esc(t)}</span></label>`).join('')}</div>
       <div class="row"><button class="primary" type="button" id="r-print">${esc(L('Imprimer / PDF','Imprimir / PDF'))}</button><button class="ghost" type="button" id="r-file">${esc(L('Envoyer le fichier','Enviar el archivo'))}</button><button class="ghost" type="button" id="r-xlsx">📊 ${esc(L('Fichier Excel','Archivo Excel'))}</button></div>
       <p class="note">${esc(L("La feuille s'imprime en paysage. Sur iPad : « Imprimer / PDF », puis Partager (⬆︎) pour garder le PDF.","La hoja se imprime en horizontal. En iPad: « Imprimir / PDF », luego Compartir (⬆︎) para guardar el PDF."))}</p><div class="status" id="r-st"></div></div>
-    <article class="paper ppsheet" id="reg">
-      ${o.title?`<h2 style="margin:0 0 2px;font-size:20px">${esc(L('Plan de plantation','Plano de plantación'))} · ${esc(pc)}</h2><p class="small" style="margin:0 0 8px">${esc(ppGroup(ch).map(c=>c.nom).join(', ')+' · '+L('départ ','inicio ')+(ppRight(ch,pc)?L('à droite','a la derecha'):L('à gauche','a la izquierda'))+' · '+isoFr(todayIso()))}</p>`:''}
-      ${ppPlanSVG(ch,pc,null,{fit:true, bw:o.bw, labels:o.labels, nums:o.nums})}
-      <div class="pplgsp">${legend}</div>
-    </article></section>`;
+    <div id="reg">${pages.map(([b1,b2],i)=>`<article class="paper ppsheet pppage">
+      ${head(b1,b2,i)}
+      ${ppPlanSVG(ch,pc,null,{fit:true, bw:o.bw, labels:o.labels, nums:o.nums, range:[b1,b2], pid:'p'+i+'-', maxh:pages.length>1?'140mm':'165mm'})}
+      <div class="pplgsp">${legendOf(pages.length>1?kIn(b1,b2):ks0)}</div>
+    </article>`).join('')}</div></section>`;
   $('r-back').onclick=()=>go('chauffe',{tab:'hist'});
   $('r-xlsx').onclick=()=>ppExportXlsx(ch,pc,$('r-st'));
   document.querySelectorAll('[data-po]').forEach(cb=>cb.onchange=()=>{ S.ppPO[cb.dataset.po]=cb.checked; renderPlanPrint(); });
+  $('r-per').querySelectorAll('button').forEach(b=>b.onclick=()=>{ S.ppPO.per=b.dataset.v; renderPlanPrint(); });
   $('r-print').onclick=()=>{ try{ window.print(); }catch(e){ $('r-st').textContent=L("L'impression n'est pas disponible ici : utilise « Envoyer le fichier ».","La impresión no está disponible aquí: usa « Enviar el archivo »."); $('r-st').className='status err'; } };
-  $('r-file').onclick=()=>{ const css=[...document.querySelectorAll('style')].map(x=>x.textContent).join('\n'); const doc=`<!doctype html><html lang="${S.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(L('Plan','Plano')+' — '+pc)}</title><style>${css}body{margin:0;padding:12px;background:#fff}.paper{border:0;padding:0}@page{size:landscape;margin:8mm}</style></head><body>${$('reg').outerHTML}</body></html>`;
+  $('r-file').onclick=()=>{ const css=[...document.querySelectorAll('style')].map(x=>x.textContent).join('\n'); const doc=`<!doctype html><html lang="${S.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(L('Plan','Plano')+' — '+pc)}</title><style>${css}body{margin:0;padding:12px;background:#fff}.paper{border:0;padding:0}@page{size:landscape;margin:8mm}</style></head><body>${$('reg').innerHTML}</body></html>`;
     shareFile(new File([doc], slug(L('plan-','plano-')+pc)+'.html', {type:'text/html'}), $('r-st'), L('Fichier prêt : ouvre-le puis imprime-le.','Archivo listo: ábrelo e imprímelo.')); };
 }
 function ppRegistreHTML(ch){ const parcs=ppParcs(ch).filter(pc=>ppPass(ch,pc).length); if(!parcs.length) return ''; const W=ppWhere(ch); const LB=ppLab(ch);
